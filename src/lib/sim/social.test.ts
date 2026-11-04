@@ -42,13 +42,14 @@ describe("social hype", () => {
 describe("posting as yourself", () => {
   it("mentioning a $TICKER sends your followers into that coin", () => {
     const { m, s } = setup();
-    const c = liveCoin(m);
+    // Copycats can share a ticker; $TICKER means the biggest live coin with it.
+    const c = findCoin(m, liveCoin(m).ticker)!;
+    expect(c.dead).toBe(false);
     s.followers = 10_000;
     const scheduledBefore = c.scheduled.length;
     const res = s.post(m, `$${c.ticker.toLowerCase()} is going to send`);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(findCoin(m, c.ticker)).toBe(c);
     expect(res.tweet.links[c.ticker]).toBe(c.id);
     expect(res.tweet.apes!).toBeGreaterThan(10);
     expect(c.scheduled.length - scheduledBefore).toBeGreaterThanOrEqual(res.tweet.apes!); // fast bots also queue a sell

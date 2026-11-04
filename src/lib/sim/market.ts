@@ -2,7 +2,7 @@ import {
   applyBuy, applySell, graduate, mcapUsd, newReserves, quoteBuy, quoteSell, shouldGraduate,
   type Reserves,
 } from "./curve";
-import { address, coinName } from "./names";
+import { address, coinName, META_THEMES, themesOf } from "./names";
 import { activity, makePlan, playerArchetype, targetMcap, type Plan } from "./plan";
 import { Rng } from "./rng";
 
@@ -67,6 +67,9 @@ export interface Coin {
   boost: number; // social hype, in log-mcap units; fades over a couple of minutes
   hypedAt?: number; // sim ms of the last post that moved it
   hypedBy?: string; // who posted (account handle, or "you")
+  themes: string[]; // metas this coin belongs to (e.g. "Cat")
+  devProfile?: DevProfile; // the creator's track record (shared across their coins)
+  rugCounted?: boolean;
   dead: boolean;
   scheduled: Action[];
 }
@@ -103,6 +106,25 @@ export interface UserTrade {
   positionPnlPct?: number;
   note?: "launch" | "rug";
   bot?: string; // placed by one of your bots
+}
+
+/**
+ * Devs launch many coins. Their hidden type decides what they launch; their public
+ * record (coins, rugs, migrations) is what a careful trader checks.
+ */
+export interface DevProfile {
+  id: string;
+  type: "rugger" | "spammer" | "builder";
+  created: number;
+  rugged: number;
+  migrated: number;
+}
+
+/** A narrative the market is obsessed with for a few minutes. */
+export interface Meta {
+  word: string;
+  startedAt: number; // sim ms
+  until: number;
 }
 
 /** pump.fun charges a small fee to create a coin. */
@@ -160,6 +182,12 @@ const SUBSTEP_MS = 100;
 const BOOST_FADE_SEC = 35;
 /** Share of post-driven buyers that are other bots (fast in, fast out). */
 const FAST_BOT_SHARE = 0.5;
+/** Metas: first one after a few minutes; extra demand for matching coins; share of copycat launches. */
+const META_FIRST_MS = 3 * 60_000;
+const META_BOOST = 0.3;
+const META_COPYCAT_SHARE = 0.35;
+/** Chance a new coin of each dev type comes from a dev who launched before. */
+const DEV_REUSE = { rugger: 0.6, spammer: 0.5, builder: 0.15 };
 /** Trading-terminal fee on your trades (like Axiom/BullX), on top of the curve/pool fee. */
 export const PLATFORM_FEE = 0.01;
 
@@ -167,6 +195,10 @@ export class Market {
   time = 0;
   rng: Rng;
   coins = new Map<string, Coin>();
+  devs = new Map<string, DevProfile>();
+  private devPools: Record<DevProfile["type"], DevProfile[]> = { rugger: [], spammer: [], builder: [] };
+  meta: Meta | null = null;
+  private nextMetaAt = META_FIRST_MS;
   sol: number;
   startSol: number;
   positions = new Map<string, Position>();
@@ -188,6 +220,7 @@ export class Market {
       const sub = Math.min(SUBSTEP_MS, left);
       left -= sub;
       this.time += sub;
+      if (this.time >= this.nextMetaAt) this.rotateMeta();
       while (this.time >= this.nextSpawnAt) {
         this.spawn();
         this.nextSpawnAt += this.rng.range(0.25, 1.75) * this.opts.spawnEverySec * 1000;
@@ -203,9 +236,13 @@ export class Market {
   spawn(): Coin {
     const rng = this.rng;
     const plan = makePlan(rng);
-    const { name, ticker } = coinName(rng);
-    const dev = address(rng);
+    const copycat = this.meta && rng.chance(META_COPYCAT_SHARE);
+    const { name, ticker } = coinName(rng, copycat ? this.meta!.word : undefined);
+    const devProfile = this.pickDev(plan.archetype);
+    const dev = devProfile.id;
     const c = this.newCoin(plan, name, ticker, rng.int(0, 359), dev);
+    c.devProfile = devProfile;
+    devProfile.created++;
     if (plan.devSol > 0) this.buy(c, dev, plan.devSol);
     for (let i = 0; i < plan.bundleWallets; i++) {
       const w = this.newWallet(c, plan.stealth ? "insider" : "bundle");
@@ -310,6 +347,7 @@ export class Market {
       dead: false,
       scheduled: [],
       boost: 0,
+      themes: themesOf(name, ticker),
     };
     this.coins.set(c.id, c);
     return c;
@@ -343,6 +381,35 @@ export class Market {
     c.scheduled.sort((a, b) => a.at - b.at);
   }
 
+  /** Serial ruggers and spam launchers keep coming back; builders mostly launch once. */
+  private pickDev(archetype: Plan["archetype"]): DevProfile {
+    const type: DevProfile["type"] = archetype === "rug" ? "rugger" : archetype === "dud" ? "spammer" : "builder";
+    const pool = this.devPools[type];
+    if (pool.length && this.rng.chance(DEV_REUSE[type])) return this.rng.pick(pool);
+    const d: DevProfile = { id: address(this.rng), type, created: 0, rugged: 0, migrated: 0 };
+    this.devs.set(d.id, d);
+    pool.push(d);
+    if (pool.length > 300) this.devs.delete(pool.shift()!.id);
+    return d;
+  }
+
+  /** Start a new meta, or end the current one and pause before the next. */
+  private rotateMeta() {
+    const rng = this.rng;
+    if (this.meta) {
+      this.meta = null;
+      this.nextMetaAt = this.time + rng.range(2, 5) * 60_000;
+      return;
+    }
+    const prev = this.lastMetaWord;
+    const word = rng.pick(META_THEMES.filter((t) => t !== prev));
+    this.lastMetaWord = word;
+    const until = this.time + rng.range(4, 8) * 60_000;
+    this.meta = { word, startedAt: this.time, until };
+    this.nextMetaAt = until;
+  }
+  private lastMetaWord = "";
+
   private newWallet(c: Coin, kind: WalletKind): string {
     const w = address(this.rng);
     c.kinds.set(w, kind);
@@ -363,12 +430,24 @@ export class Market {
     // Bot devs rug on a schedule; on your own coin it's when you dump your bag.
     const rugSec = p.rugAt ?? (c.ruggedAt !== undefined ? (c.ruggedAt - c.createdAt) / 1000 : undefined);
     const rugged = rugSec !== undefined && age >= rugSec;
+    if (rugged && !c.rugCounted) {
+      c.rugCounted = true;
+      if (c.devProfile) c.devProfile.rugged++;
+    }
+    // In-meta coins get extra demand: ramps in over 30s, then fades as copycats flood in.
+    let meta = 0;
+    if (this.meta && c.themes.includes(this.meta.word)) {
+      const { startedAt, until } = this.meta;
+      const rampIn = Math.min(1, (this.time - startedAt) / 30_000);
+      const fade = Math.max(0, (until - this.time) / (until - startedAt));
+      meta = META_BOOST * rampIn * fade;
+    }
     c.noise += -0.2 * c.noise * dt + 0.18 * Math.sqrt(dt) * rng.normal();
     c.boost *= Math.exp(-dt / BOOST_FADE_SEC); // social hype fades
 
     const mcap = mcapUsd(c.r);
     let rate = p.baseRate * activity(p, age) * Math.min(3, Math.pow(Math.max(1, mcap / c.startMcap), 0.2));
-    rate *= 1 + c.boost;
+    rate *= 1 + c.boost + meta;
     // After a rug: a burst of panic selling, then silence.
     if (rugged) rate = p.baseRate * 4 * Math.exp(-(age - rugSec!) / 15);
 
@@ -377,7 +456,7 @@ export class Market {
       const cur = mcapUsd(c.r);
       let pBuy = 0.15;
       if (!rugged) {
-        const err = Math.log((targetMcap(p, c.startMcap, age) * Math.exp(c.noise + c.boost)) / cur);
+        const err = Math.log((targetMcap(p, c.startMcap, age) * Math.exp(c.noise + c.boost + meta)) / cur);
         pBuy = Math.min(0.9, Math.max(0.1, 0.5 + 0.4 * Math.tanh(1.5 * err)));
       }
       if (rng.chance(pBuy)) {
@@ -459,6 +538,7 @@ export class Market {
     if (shouldGraduate(c.r)) {
       graduate(c.r);
       c.graduatedAt = this.time;
+      if (c.devProfile) c.devProfile.migrated++;
     }
     return q;
   }

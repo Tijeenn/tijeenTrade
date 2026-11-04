@@ -142,6 +142,8 @@ function BotCard({ kind, cfg, setCfg }: { kind: BotKind; cfg: BotsConfig; setCfg
             <Num label="Max dev holding" suffix="%" value={cfg.sniper.maxDevPct} onChange={(v) => v !== null && set({ maxDevPct: v })} />
             <Num label="Max bundle" suffix="%" value={cfg.sniper.maxBundlePct} onChange={(v) => v !== null && set({ maxBundlePct: v })} />
             <Num label="Max launch MC" isSol value={cfg.sniper.maxStartMcapSol} onChange={(v) => v !== null && set({ maxStartMcapSol: v })} />
+            <Num label="Max past dev rugs" hint="Skip devs who rugged more coins than this before. 0 = only devs with a clean record"
+              value={cfg.sniper.maxDevRugs} onChange={(v) => v !== null && set({ maxDevRugs: Math.floor(v) })} />
             <label className="flex items-center justify-between text-xs">
               <span className="text-muted">Require socials</span>
               <Toggle on={cfg.sniper.requireSocials} onChange={(v) => set({ requireSocials: v })} label="Require socials" />

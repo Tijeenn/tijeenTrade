@@ -17,6 +17,10 @@ export interface CoinStats {
   buys: number;
   sells: number;
   graduated: boolean;
+  // the dev's record on their OTHER coins (unknown dev = all zero)
+  devPrevCoins: number;
+  devPrevRugs: number;
+  devPrevMigrations: number;
 }
 
 export function coinStats(c: Coin, now: number): CoinStats {
@@ -47,5 +51,8 @@ export function coinStats(c: Coin, now: number): CoinStats {
     buys: c.buys,
     sells: c.sells,
     graduated: c.r.phase === "graduated",
+    devPrevCoins: c.devProfile ? c.devProfile.created - 1 : 0,
+    devPrevRugs: c.devProfile ? c.devProfile.rugged - (c.rugCounted ? 1 : 0) : 0,
+    devPrevMigrations: c.devProfile ? c.devProfile.migrated - (c.r.phase === "graduated" ? 1 : 0) : 0,
   };
 }

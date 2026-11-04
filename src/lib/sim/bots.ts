@@ -33,6 +33,7 @@ export interface SniperConfig extends BuyConfig {
   maxDevPct: number;
   maxBundlePct: number;
   maxStartMcapSol: number; // skip coins that launched already pumped by dev/bundle buys
+  maxDevRugs: number; // skip devs who rugged more than this many coins before
 }
 
 export interface PostsConfig extends BuyConfig {
@@ -50,7 +51,7 @@ export interface BotsConfig {
 export const DEFAULT_BOTS: BotsConfig = {
   sniper: {
     enabled: false, buySol: 0.2, slippagePct: 30, priorityFeeSol: 0.003, budgetSol: 5,
-    maxAgeSec: 3, requireSocials: false, maxDevPct: 10, maxBundlePct: 10, maxStartMcapSol: 50,
+    maxAgeSec: 3, requireSocials: false, maxDevPct: 10, maxBundlePct: 10, maxStartMcapSol: 50, maxDevRugs: 0,
     exit: { takeProfitPct: 100, stopLossPct: 35, maxHoldSec: 120 },
   },
   posts: {
@@ -157,6 +158,7 @@ export class Bots {
         : st.devPct > cfg.maxDevPct ? `dev ${st.devPct.toFixed(1)}%`
         : st.bundlePct > cfg.maxBundlePct ? `bundle ${st.bundlePct.toFixed(1)}%`
         : startSol > cfg.maxStartMcapSol ? `launched at ${startSol.toFixed(0)} SOL MC`
+        : st.devPrevRugs > cfg.maxDevRugs ? `dev rugged ${st.devPrevRugs} before`
         : null;
       if (why) continue; // filtered out quietly; there are a lot of launches
       this.buy(m, "sniper", c.id, c.ticker, `dev ${st.devPct.toFixed(1)}% · bundle ${st.bundlePct.toFixed(1)}%`);

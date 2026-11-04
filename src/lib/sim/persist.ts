@@ -1,4 +1,5 @@
 import type { Coin, Market, Position, UserTrade, WalletKind } from "./market";
+import { themesOf } from "./names";
 
 /**
  * Saving the whole market would not fit in browser storage, so a save holds your
@@ -61,6 +62,7 @@ export function restore(m: Market, s: MarketSave): void {
       candles1m: sc.candles1m.map((k) => ({ ...k, t: k.t + sec })),
       scheduled: sc.scheduled.map((a) => ({ ...a, at: a.at + shift })),
       boost: sc.boost ?? 0, // saves from before social hype existed
+      themes: sc.themes ?? themesOf(sc.name, sc.ticker),
       hypedAt: sc.hypedAt === undefined ? undefined : sc.hypedAt + shift,
       holders: new Map(sc.holders),
       kinds: new Map(sc.kinds),
