@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Socials } from "@/components/pulse/CoinCard";
+import { HYPE_BADGE_MS, Socials } from "@/components/pulse/CoinCard";
+import { getAccount } from "@/lib/sim/social";
 import { TokenAvatar } from "@/components/TokenAvatar";
 import { age, compact, mc, pct, shortAddr } from "@/lib/format";
 import type { Coin, Market } from "@/lib/sim/market";
@@ -93,6 +94,12 @@ export function CoinView({ id }: { id: string }) {
                 {age(s.ageSec * 1000)} old
                 {s.graduated && <span className="ml-2 rounded bg-up/15 px-1 text-up">Migrated</span>}
                 {coin.dead && <span className="ml-2 rounded bg-line-2 px-1 text-muted">Inactive</span>}
+                {coin.hypedAt !== undefined && m.time - coin.hypedAt < HYPE_BADGE_MS && (
+                  <span className="ml-2 rounded bg-orange-500/15 px-1 font-semibold text-orange-400">
+                    🔥 {coin.hypedBy === "you" ? "You" : getAccount(coin.hypedBy ?? "")?.name ?? "@" + coin.hypedBy} posted about
+                    it {age(m.time - coin.hypedAt)} ago
+                  </span>
+                )}
               </div>
             </div>
           </div>

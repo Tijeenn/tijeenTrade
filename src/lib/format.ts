@@ -18,6 +18,11 @@ export const mc = (mcapUsd: number, digits = 1) => compact(usdToSol(mcapUsd), di
 
 export const tokens = (n: number) => compact(n, 2);
 
+/** Whole-number counts (likes, followers): 999, 12,345, 1.2M. */
+export const count = (n: number) => (Math.abs(n) < 1e5 ? Math.round(n).toLocaleString("en-US") : compact(n, 1));
+
+export const plural = (n: number, word: string) => `${count(n)} ${word}${Math.round(n) === 1 ? "" : "s"}`;
+
 export function sol(n: number, digits?: number): string {
   const d = digits ?? (Math.abs(n) >= 100 ? 1 : Math.abs(n) >= 1 ? 2 : 3);
   return n.toFixed(d);

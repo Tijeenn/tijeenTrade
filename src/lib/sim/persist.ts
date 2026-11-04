@@ -60,6 +60,8 @@ export function restore(m: Market, s: MarketSave): void {
       candles: sc.candles.map((k) => ({ ...k, t: k.t + sec })),
       candles1m: sc.candles1m.map((k) => ({ ...k, t: k.t + sec })),
       scheduled: sc.scheduled.map((a) => ({ ...a, at: a.at + shift })),
+      boost: sc.boost ?? 0, // saves from before social hype existed
+      hypedAt: sc.hypedAt === undefined ? undefined : sc.hypedAt + shift,
       holders: new Map(sc.holders),
       kinds: new Map(sc.kinds),
       holderList: sc.holders.map(([w]) => w),

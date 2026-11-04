@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { mc, pct, signed, sol, tokens } from "@/lib/format";
 import type { UserTrade } from "@/lib/sim/market";
-import { getMarket } from "@/lib/store";
+import Link from "next/link";
+import type { SocialAlert } from "@/lib/sim/social";
+import { getMarket, getSocial } from "@/lib/store";
 import { Sol } from "./Sol";
 
 const MAX_TOASTS = 4;
-const DURATION = { buy: 3500, sell: 7000, failed: 4500 };
+const DURATION = { buy: 3500, sell: 7000, failed: 4500, social: 7000 };
 
 const pnlText = (sol_: number, pct_: number) => (
   <>
@@ -107,11 +109,20 @@ function FailedToast({ t }: { t: UserTrade }) {
 /** Pops a notification whenever one of your orders lands or fails. Click to dismiss. */
 export function Toaster() {
   const [toasts, setToasts] = useState<UserTrade[]>([]);
+  const [alerts, setAlerts] = useState<SocialAlert[]>([]);
 
   useEffect(() => {
     const m = getMarket();
+    const s = getSocial();
     let seen = m.history.length;
+    let seenAlert = s.alerts.at(-1)?.id ?? 0;
     const id = setInterval(() => {
+      const newAlerts = s.alerts.filter((a) => a.id > seenAlert);
+      if (newAlerts.length) {
+        seenAlert = newAlerts.at(-1)!.id;
+        setAlerts((a) => [...a, ...newAlerts].slice(-2));
+        for (const a of newAlerts) setTimeout(() => setAlerts((all) => all.filter((x) => x.id !== a.id)), DURATION.social);
+      }
       if (m.history.length <= seen) return;
       const fresh = m.history.slice(seen);
       seen = m.history.length;
@@ -126,6 +137,23 @@ export function Toaster() {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex w-[min(20rem,calc(100vw-2rem))] flex-col gap-2">
+      {alerts.map((a) => (
+        <div
+          key={"a" + a.id}
+          className={`toast-in rounded-lg border bg-panel-2 px-3 py-2 text-sm shadow-xl ${
+            a.tone === "good" ? "border-up/50" : a.tone === "bad" ? "border-down/50" : "border-sky-500/50"
+          }`}
+        >
+          <div className="text-xs font-semibold text-sky-400">𝕏 {a.tone === "info" ? "Trending post" : "Your call"}</div>
+          <div>{a.text}</div>
+          <div className="mt-1 flex gap-3 text-xs">
+            {a.coinId && <Link href={`/coin/${a.coinId}`} className="font-semibold text-brand hover:underline">View coin →</Link>}
+            <button onClick={() => setAlerts((all) => all.filter((x) => x.id !== a.id))} className="text-dim hover:text-text">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ))}
       {toasts.map((t) => (
         <button
           key={t.id}

@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Market } from "./sim/market";
 import { restore, snapshot, type MarketSave } from "./sim/persist";
+import { Social, type SocialSave } from "./sim/social";
 import { SETTINGS } from "./settings";
 
 /** Market history simulated before the page shows, so the feed isn't empty. */
@@ -25,15 +26,24 @@ export interface Run {
 interface SaveFile {
   run: Run;
   market: MarketSave;
+  social?: SocialSave;
 }
 
 let market: Market | null = null;
+let social = new Social(Math.floor(Math.random() * 2 ** 31));
 let run: Run = { startedAt: 0, equity: [] };
 let epochMs = 0;
 
-function freshMarket(startSol: number): Market {
+/** Social feed history simulated at the end of the warm-up, so it isn't empty either. */
+const SOCIAL_WARMUP_MS = 2 * 60_000;
+
+function freshMarket(startSol: number, s: Social): Market {
   const m = new Market({ seed: Math.floor(Math.random() * 2 ** 31), startSol });
-  m.step(WARMUP_MS);
+  m.step(WARMUP_MS - SOCIAL_WARMUP_MS);
+  for (let t = 0; t < SOCIAL_WARMUP_MS; t += 5000) {
+    m.step(5000);
+    s.step(m);
+  }
   epochMs = Math.round((Date.now() - m.time) / 1000) * 1000;
   return m;
 }
@@ -49,7 +59,7 @@ function readSave(): SaveFile | null {
 
 export function save(): void {
   if (!market) return;
-  const file: SaveFile = { run, market: snapshot(market) };
+  const file: SaveFile = { run, market: snapshot(market), social: social.save(market.time) };
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(file));
   } catch {
@@ -70,6 +80,7 @@ function startLoop() {
   setInterval(() => {
     const now = performance.now();
     market!.step(Math.min(now - last, MAX_CATCHUP_MS));
+    social.step(market!);
     last = now;
     if (now - lastEquity >= EQUITY_EVERY_MS) {
       lastEquity = now;
@@ -91,20 +102,27 @@ export function getMarket(): Market {
   if (market) return market;
   const saved = readSave();
   if (saved) {
-    market = freshMarket(saved.market.startSol);
+    market = freshMarket(saved.market.startSol, social);
     try {
       restore(market, saved.market);
       run = saved.run;
+      if (saved.social) social.load(saved.social, market.time);
     } catch {
-      market = freshMarket(SETTINGS.startSol); // corrupt save: start over
+      market = freshMarket(SETTINGS.startSol, social); // corrupt save: start over
       run = { startedAt: Date.now(), equity: [[Date.now(), market.startSol]] };
     }
   } else {
-    market = freshMarket(SETTINGS.startSol);
+    market = freshMarket(SETTINGS.startSol, social);
     run = { startedAt: Date.now(), equity: [[Date.now(), market.startSol]] };
   }
   startLoop();
   return market;
+}
+
+/** Simulated crypto Twitter for this tab. */
+export function getSocial(): Social {
+  getMarket();
+  return social;
 }
 
 export function getRun(): Run {
@@ -114,8 +132,11 @@ export function getRun(): Run {
 
 /** Wipe everything and start a new run with `startSol`. */
 export function resetRun(startSol: number): void {
-  getMarket(); // make sure the loop is running
-  market = freshMarket(startSol);
+  const old = getMarket(); // make sure the loop is running
+  const account = social.save(old.time); // your followers and posts survive a new run
+  social = new Social(Math.floor(Math.random() * 2 ** 31));
+  market = freshMarket(startSol, social);
+  social.load(account, market.time);
   run = { startedAt: Date.now(), equity: [[Date.now(), startSol]] };
   save();
 }

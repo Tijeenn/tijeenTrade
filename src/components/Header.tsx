@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { signed, sol } from "@/lib/format";
 import { useMarket, useMounted } from "@/lib/store";
 import { AccountButton } from "./account/AccountButton";
+import { SocialButton } from "./social/SocialButton";
 import { Sol } from "./Sol";
 
 const NAV = [
@@ -61,6 +62,7 @@ export function Header() {
           Simulation · not real money
         </span>
         {mounted && <Balance />}
+        {mounted && <SocialButton />}
         {mounted && <AccountButton />}
       </div>
     </header>

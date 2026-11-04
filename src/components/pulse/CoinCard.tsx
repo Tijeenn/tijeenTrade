@@ -9,6 +9,9 @@ import { buy } from "@/lib/store";
 import { SETTINGS } from "@/lib/settings";
 import { Sol } from "@/components/Sol";
 
+/** How long a coin shows the 🔥 badge after someone posted about it. */
+export const HYPE_BADGE_MS = 120_000;
+
 function Badge({ label, value, bad, title }: { label: string; value: string; bad: boolean; title: string }) {
   return (
     <span
@@ -64,6 +67,14 @@ export function CoinCard({ coin, m }: { coin: Coin; m: Market }) {
             <div className="flex min-w-0 items-baseline gap-1.5">
               <span className="truncate font-semibold">{coin.ticker}</span>
               <span className="truncate text-xs text-muted">{coin.name}</span>
+              {coin.hypedAt !== undefined && m.time - coin.hypedAt < HYPE_BADGE_MS && (
+                <span
+                  className="shrink-0 rounded bg-orange-500/15 px-1 text-[10px] font-semibold text-orange-400"
+                  title={`Posted about by ${coin.hypedBy === "you" ? "you" : "@" + coin.hypedBy}`}
+                >
+                  🔥 posted
+                </span>
+              )}
             </div>
             <div className="num shrink-0 text-sm">
               <span className="text-[10px] text-dim">MC </span>

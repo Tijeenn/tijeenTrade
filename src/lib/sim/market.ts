@@ -63,6 +63,9 @@ export interface Coin {
   devSold: boolean;
   mine?: boolean; // you launched it (you are the dev)
   ruggedAt?: number; // sim ms when you rugged your own coin
+  boost: number; // social hype, in log-mcap units; fades over a couple of minutes
+  hypedAt?: number; // sim ms of the last post that moved it
+  hypedBy?: string; // who posted (account handle, or "you")
   dead: boolean;
   scheduled: Action[];
 }
@@ -150,6 +153,8 @@ function addToCandles(arr: Candle[], t: number, m: number, sol: number, max: num
   if (arr.length > max) arr.splice(0, arr.length - max);
 }
 const SUBSTEP_MS = 100;
+/** How long social hype lingers (time constant, seconds). */
+const BOOST_FADE_SEC = 90;
 /** Trading-terminal fee on your trades (like Axiom/BullX), on top of the curve/pool fee. */
 export const PLATFORM_FEE = 0.01;
 
@@ -204,6 +209,27 @@ export class Market {
     c.startMcap = mcapUsd(c.r);
     this.schedule(c);
     return c;
+  }
+
+  /**
+   * A post moved this coin: followers ape in over the next seconds (front-loaded, so late
+   * buyers pay more), and buy pressure stays elevated until the hype fades.
+   */
+  hype(coinId: string, h: { strength: number; buyers: number; avgBuySol: number; by: string }): void {
+    const c = this.coins.get(coinId);
+    if (!c || c.dead) return;
+    c.boost += h.strength;
+    c.hypedAt = this.time;
+    c.hypedBy = h.by;
+    for (let i = 0; i < h.buyers; i++) {
+      const delaySec = Math.min(60, this.rng.logNormal(6, 0.8));
+      c.scheduled.push({
+        at: this.time + 500 + delaySec * 1000,
+        wallet: this.newWallet(c, "trader"),
+        buySol: Math.max(0.01, this.rng.logNormal(h.avgBuySol, 0.8)),
+      });
+    }
+    c.scheduled.sort((a, b) => a.at - b.at);
   }
 
   /** Launch your own coin: you're the dev. Creation fee + optional dev buy, atomically. */
@@ -272,6 +298,7 @@ export class Market {
       devSold: false,
       dead: false,
       scheduled: [],
+      boost: 0,
     };
     this.coins.set(c.id, c);
     return c;
@@ -324,9 +351,11 @@ export class Market {
     const rugSec = p.rugAt ?? (c.ruggedAt !== undefined ? (c.ruggedAt - c.createdAt) / 1000 : undefined);
     const rugged = rugSec !== undefined && age >= rugSec;
     c.noise += -0.2 * c.noise * dt + 0.18 * Math.sqrt(dt) * rng.normal();
+    c.boost *= Math.exp(-dt / BOOST_FADE_SEC); // social hype fades
 
     const mcap = mcapUsd(c.r);
     let rate = p.baseRate * activity(p, age) * Math.min(3, Math.pow(Math.max(1, mcap / c.startMcap), 0.2));
+    rate *= 1 + c.boost;
     // After a rug: a burst of panic selling, then silence.
     if (rugged) rate = p.baseRate * 4 * Math.exp(-(age - rugSec!) / 15);
 
@@ -335,7 +364,7 @@ export class Market {
       const cur = mcapUsd(c.r);
       let pBuy = 0.15;
       if (!rugged) {
-        const err = Math.log((targetMcap(p, c.startMcap, age) * Math.exp(c.noise)) / cur);
+        const err = Math.log((targetMcap(p, c.startMcap, age) * Math.exp(c.noise + c.boost)) / cur);
         pBuy = Math.min(0.9, Math.max(0.1, 0.5 + 0.4 * Math.tanh(1.5 * err)));
       }
       if (rng.chance(pBuy)) {

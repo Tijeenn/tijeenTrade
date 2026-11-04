@@ -5,7 +5,7 @@ const ADJ = [
   "Moon", "Degen", "Chill", "Crying", "Wet", "Fat", "Smol", "Golden", "Magic",
   "Cyber", "Super", "Lil", "Big", "Frozen", "Spicy", "Drunk", "Lucky", "Ugly", "Cute", "Mad",
 ];
-const NOUN = [
+export const NOUN = [
   "Frog", "Cat", "Dog", "Penguin", "Hamster", "Pepe", "Doge", "Shiba", "Goat", "Monkey", "Ape",
   "Whale", "Banana", "Potato", "Wizard", "Chad", "Bonk", "Duck", "Otter", "Capybara", "Pig",
   "Rat", "Bear", "Bull", "Hippo", "Fish", "Alien", "Robot", "Ghost", "Cheems", "Beaver", "Moo Deng",
