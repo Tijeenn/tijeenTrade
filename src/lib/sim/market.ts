@@ -3,7 +3,7 @@ import {
   type Reserves,
 } from "./curve";
 import { address, coinName } from "./names";
-import { activity, makePlan, targetMcap, type Plan } from "./plan";
+import { activity, makePlan, playerArchetype, targetMcap, type Plan } from "./plan";
 import { Rng } from "./rng";
 
 export type Side = "buy" | "sell";
@@ -61,6 +61,8 @@ export interface Coin {
   lastTradeAt: number;
   graduatedAt?: number;
   devSold: boolean;
+  mine?: boolean; // you launched it (you are the dev)
+  ruggedAt?: number; // sim ms when you rugged your own coin
   dead: boolean;
   scheduled: Action[];
 }
@@ -95,6 +97,18 @@ export interface UserTrade {
   // Set when this sell closed the position: result of the whole trade.
   positionPnlSol?: number;
   positionPnlPct?: number;
+  note?: "launch" | "rug";
+}
+
+/** pump.fun charges a small fee to create a coin. */
+export const CREATE_FEE_SOL = 0.02;
+
+export interface LaunchRequest {
+  name: string;
+  ticker: string;
+  hue: number;
+  socials: { x: boolean; tg: boolean; web: boolean };
+  devBuySol: number;
 }
 
 export interface OrderRequest {
@@ -181,11 +195,62 @@ export class Market {
     const plan = makePlan(rng);
     const { name, ticker } = coinName(rng);
     const dev = address(rng);
+    const c = this.newCoin(plan, name, ticker, rng.int(0, 359), dev);
+    if (plan.devSol > 0) this.buy(c, dev, plan.devSol);
+    for (let i = 0; i < plan.bundleWallets; i++) {
+      const w = this.newWallet(c, "bundle");
+      this.buy(c, w, (plan.bundleSol / plan.bundleWallets) * rng.range(0.6, 1.4));
+    }
+    c.startMcap = mcapUsd(c.r);
+    this.schedule(c);
+    return c;
+  }
+
+  /** Launch your own coin: you're the dev. Creation fee + optional dev buy, atomically. */
+  launch(req: LaunchRequest): { ok: true; coinId: string } | { ok: false; reason: string } {
+    const name = req.name.trim();
+    const ticker = req.ticker.trim().toUpperCase();
+    if (!name || name.length > 32) return { ok: false, reason: "Name must be 1–32 characters" };
+    if (!/^[A-Z0-9]{1,10}$/.test(ticker)) return { ok: false, reason: "Ticker must be 1–10 letters or numbers" };
+    if (!(req.devBuySol >= 0)) return { ok: false, reason: "Invalid dev buy" };
+    if (CREATE_FEE_SOL + req.devBuySol > this.sol) return { ok: false, reason: "Insufficient SOL" };
+
+    const plan = makePlan(this.rng, playerArchetype(this.rng, req.socials, req.devBuySol));
+    Object.assign(plan, {
+      socials: req.socials, devSol: 0, bundleWallets: 0, bundleSol: 0,
+      devSellAt: undefined, devSellFrac: undefined, rugAt: undefined,
+    });
+    const c = this.newCoin(plan, name, ticker, ((Math.round(req.hue) % 360) + 360) % 360, "you");
+    c.mine = true;
+    c.kinds.set("you", "dev");
+
+    this.sol -= CREATE_FEE_SOL;
+    const pos: Position = {
+      coinId: c.id, ticker, tokens: 0, costSol: 0, realizedSol: -CREATE_FEE_SOL, boughtSol: 0, soldSol: 0,
+    };
+    let q = { tokensOut: 0, solUsed: 0, fee: 0 };
+    if (req.devBuySol > 0) {
+      q = this.buy(c, "you", req.devBuySol);
+      this.sol -= q.solUsed;
+      pos.tokens = q.tokensOut;
+      pos.costSol = pos.boughtSol = q.solUsed;
+    }
+    this.positions.set(c.id, pos);
+    c.startMcap = mcapUsd(c.r);
+    this.schedule(c);
+    this.history.push({
+      id: this.nextId++, t: this.time, coinId: c.id, ticker, side: "buy", status: "ok", note: "launch",
+      sol: q.solUsed, tokens: q.tokensOut, mcapUsd: mcapUsd(c.r), fee: q.fee + CREATE_FEE_SOL, priorityFee: 0,
+    });
+    return { ok: true, coinId: c.id };
+  }
+
+  private newCoin(plan: Plan, name: string, ticker: string, hue: number, dev: string): Coin {
     const c: Coin = {
-      id: address(rng, 32) + "pump",
+      id: address(this.rng, 32) + "pump",
       name,
       ticker,
-      hue: rng.int(0, 359),
+      hue,
       createdAt: this.time,
       dev,
       plan,
@@ -209,14 +274,14 @@ export class Market {
       scheduled: [],
     };
     this.coins.set(c.id, c);
+    return c;
+  }
 
-    if (plan.devSol > 0) this.buy(c, dev, plan.devSol);
-    for (let i = 0; i < plan.bundleWallets; i++) {
-      const w = this.newWallet(c, "bundle");
-      this.buy(c, w, (plan.bundleSol / plan.bundleWallets) * rng.range(0.6, 1.4));
-    }
-    c.startMcap = mcapUsd(c.r);
-
+  /** Queue the bots that act on a fresh coin: snipers, dev sells, the rug, KOLs. */
+  private schedule(c: Coin): void {
+    const { rng } = this;
+    const plan = c.plan;
+    const dev = c.dev;
     const at = (sec: number) => c.createdAt + sec * 1000;
     for (let i = 0; i < plan.snipers; i++) {
       const w = this.newWallet(c, "sniper");
@@ -236,7 +301,6 @@ export class Market {
       c.scheduled.push({ at: at(plan.kolAt + rng.range(20, 300)), wallet: w, sellFrac: 1 });
     }
     c.scheduled.sort((a, b) => a.at - b.at);
-    return c;
   }
 
   private newWallet(c: Coin, kind: WalletKind): string {
@@ -256,13 +320,15 @@ export class Market {
       else if (a.sellFrac) this.sell(c, a.wallet, (c.holders.get(a.wallet) ?? 0) * a.sellFrac);
     }
 
-    const rugged = p.rugAt !== undefined && age >= p.rugAt;
+    // Bot devs rug on a schedule; on your own coin it's when you dump your bag.
+    const rugSec = p.rugAt ?? (c.ruggedAt !== undefined ? (c.ruggedAt - c.createdAt) / 1000 : undefined);
+    const rugged = rugSec !== undefined && age >= rugSec;
     c.noise += -0.2 * c.noise * dt + 0.18 * Math.sqrt(dt) * rng.normal();
 
     const mcap = mcapUsd(c.r);
     let rate = p.baseRate * activity(p, age) * Math.min(3, Math.pow(Math.max(1, mcap / c.startMcap), 0.2));
     // After a rug: a burst of panic selling, then silence.
-    if (rugged) rate = p.baseRate * 4 * Math.exp(-(age - p.rugAt!) / 15);
+    if (rugged) rate = p.baseRate * 4 * Math.exp(-(age - rugSec!) / 15);
 
     const n = rng.poisson(rate * dt);
     for (let i = 0; i < n; i++) {
@@ -448,7 +514,7 @@ export class Market {
       const swapIn = o.amount - platformFee;
       const q = quoteBuy(c.r, swapIn);
       if (q.tokensOut < o.minOut) return fail("Slippage exceeded");
-      c.kinds.set("you", "you");
+      if (c.kinds.get("you") !== "dev") c.kinds.set("you", "you");
       this.buy(c, "you", swapIn);
       this.sol += swapIn - q.solUsed; // refund if the curve filled partially
       const spent = q.solUsed + platformFee;
@@ -466,6 +532,16 @@ export class Market {
       if (received < o.minOut) return fail("Slippage exceeded");
       this.sell(c, "you", tokens);
       const frac = tokens / pos.tokens;
+      // Your own coin: dumping half or more of your dev bag is a rug; a smaller dump spooks buyers.
+      let rug = false;
+      if (c.mine && c.ruggedAt === undefined) {
+        if (frac >= 0.5) {
+          c.ruggedAt = this.time;
+          rug = true;
+        } else {
+          c.noise -= frac; // sentiment hit, e.g. -0.3 for a 30% dump
+        }
+      }
       const cost = pos.costSol * frac;
       pos.tokens -= tokens;
       pos.costSol -= cost;
@@ -479,6 +555,7 @@ export class Market {
       this.history.push({
         ...base, status: "ok", sol: received, tokens, fee: q.fee + platformFee, mcapUsd: mcapUsd(c.r),
         pnlSol, pnlPct: cost > 0 ? (pnlSol / cost) * 100 : 0, soldPct: frac * 100,
+        ...(rug && { note: "rug" as const }),
         ...(closed && { positionPnlSol: pos.realizedSol, positionPnlPct: (pos.realizedSol / pos.boughtSol) * 100 }),
       });
     }

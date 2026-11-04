@@ -37,8 +37,24 @@ const between = (rng: Rng, a: number, b: number) => rng.range(a, b);
 const logBetween = (rng: Rng, a: number, b: number) =>
   Math.exp(rng.range(Math.log(a), Math.log(b)));
 
-export function makePlan(rng: Rng): Plan {
-  const archetype = rng.weighted(ARCHETYPE_ODDS);
+/**
+ * Fate of a coin YOU launch. You are the dev, so it never rugs by itself (that's your call).
+ * Socials pull in buyers; a fat dev bag (over ~10% of supply) scares them off.
+ */
+export function playerArchetype(rng: Rng, socials: Plan["socials"], devBuySol: number): Archetype {
+  const n = Number(socials.x) + Number(socials.tg) + Number(socials.web);
+  const w: Record<Archetype, number> = {
+    dud: 0.55 - 0.08 * n,
+    rug: 0,
+    pumpdump: 0.3 + 0.04 * n,
+    runner: 0.12 + 0.03 * n,
+    moon: 0.03 + 0.01 * n,
+  };
+  if (devBuySol > 3) w.dud += 0.25;
+  return rng.weighted(w);
+}
+
+export function makePlan(rng: Rng, archetype: Archetype = rng.weighted(ARCHETYPE_ODDS)): Plan {
   const socialChance = { dud: 0.35, rug: 0.45, pumpdump: 0.6, runner: 0.8, moon: 0.9 }[archetype];
   const socials = {
     x: rng.chance(socialChance),

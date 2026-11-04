@@ -28,7 +28,7 @@ function SellToast({ t }: { t: UserTrade }) {
   const win = pnl >= 0;
   const closed = t.positionPnlSol !== undefined;
   const headline = closed ? t.positionPnlPct! : t.pnlPct ?? 0;
-  const tag = badge(headline);
+  const tag = t.note === "rug" ? "🧹 RUG PULLED" : badge(headline);
   return (
     <div
       className={`rounded-lg border-2 bg-panel-2 px-4 py-3 shadow-2xl ${
@@ -37,7 +37,9 @@ function SellToast({ t }: { t: UserTrade }) {
     >
       <div className="flex items-center justify-between text-xs">
         <span className="font-semibold text-muted">
-          Sold {t.soldPct !== undefined && t.soldPct < 99.9 ? `${pct(t.soldPct)} of ` : ""}${t.ticker}
+          {t.note === "rug"
+            ? `You rugged $${t.ticker}`
+            : `Sold ${t.soldPct !== undefined && t.soldPct < 99.9 ? `${pct(t.soldPct)} of ` : ""}$${t.ticker}`}
         </span>
         {tag && <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${win ? "bg-up/20 text-up" : "bg-down/20 text-down"}`}>{tag}</span>}
       </div>
@@ -62,6 +64,21 @@ function SellToast({ t }: { t: UserTrade }) {
 }
 
 function BuyToast({ t }: { t: UserTrade }) {
+  if (t.note === "launch") {
+    return (
+      <div className="rounded-lg border-2 border-brand/60 bg-panel-2 px-4 py-3 shadow-2xl">
+        <div className="text-lg font-bold">🚀 ${t.ticker} is live!</div>
+        <div className="flex flex-wrap gap-x-2 text-xs text-muted">
+          {t.tokens > 0 ? (
+            <span>Dev buy {tokens(t.tokens)} for <Sol size={10}>{sol(t.sol)}</Sol></span>
+          ) : (
+            <span>No dev buy</span>
+          )}
+          <span>fees <Sol size={10}>{sol(t.fee, 3)}</Sol></span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border border-up/40 bg-panel-2 px-3 py-2 text-sm shadow-xl">
       <div className="font-medium text-up">Bought {tokens(t.tokens)} ${t.ticker}</div>

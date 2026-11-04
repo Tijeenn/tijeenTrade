@@ -78,7 +78,11 @@ export function CoinCard({ coin, m }: { coin: Coin; m: Market }) {
               <span title="Buys / sells">
                 <span className="text-up">{s.buys}</span>/<span className="text-down">{s.sells}</span>
               </span>
-              {held && <span className="rounded bg-brand/20 px-1 text-[10px] font-semibold text-brand">HOLDING</span>}
+              {coin.mine ? (
+                <span className="rounded bg-warn/20 px-1 text-[10px] font-semibold text-warn">YOUR COIN</span>
+              ) : (
+                held && <span className="rounded bg-brand/20 px-1 text-[10px] font-semibold text-brand">HOLDING</span>
+              )}
             </div>
             <div>
               <span className="text-[10px] text-dim">V </span>

@@ -9,6 +9,7 @@ import { coinStats } from "@/lib/sim/stats";
 import { useMarket } from "@/lib/store";
 import { Chart } from "./Chart";
 import { CoinTables } from "./Tables";
+import { DevPanel } from "./DevPanel";
 import { PositionBox, TradePanel } from "./TradePanel";
 import { Sol } from "@/components/Sol";
 
@@ -55,7 +56,7 @@ function TokenInfo({ coin, m }: { coin: Coin; m: Market }) {
       <Row label="ATH" value={mc(s.athMcapUsd)} sol hint="Highest market cap so far" />
       <div className="mt-3 flex items-center justify-between text-[11px] text-dim">
         <span>CA: {shortAddr(coin.id)}</span>
-        <span>Dev: {shortAddr(coin.dev)}</span>
+        <span>Dev: {coin.mine ? "You" : shortAddr(coin.dev)}</span>
       </div>
     </div>
   );
@@ -109,6 +110,7 @@ export function CoinView({ id }: { id: string }) {
         </div>
       </div>
       <aside className="w-full shrink-0 overflow-y-auto bg-panel lg:w-[330px]">
+        {coin.mine && <DevPanel coin={coin} m={m} />}
         <TradePanel coin={coin} m={m} />
         <PositionBox coin={coin} m={m} />
         <TokenInfo coin={coin} m={m} />

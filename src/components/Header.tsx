@@ -11,6 +11,7 @@ const NAV = [
   { href: "/", label: "Pulse", short: "Pulse" },
   { href: "/portfolio", label: "Portfolio", short: "Folio" },
   { href: "/leaderboard", label: "Leaderboard", short: "Ranks" },
+  { href: "/create", label: "+ Create", short: "+" },
   { href: "/settings", label: "Settings", short: "⚙" },
 ];
 

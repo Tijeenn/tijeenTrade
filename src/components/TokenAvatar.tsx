@@ -1,7 +1,7 @@
 import type { Coin } from "@/lib/sim/market";
 
 /** Generated coin "image": a gradient + the ticker's first letters. */
-export function TokenAvatar({ coin, size = 48 }: { coin: Coin; size?: number }) {
+export function TokenAvatar({ coin, size = 48 }: { coin: Pick<Coin, "hue" | "ticker">; size?: number }) {
   const h = coin.hue;
   return (
     <div
