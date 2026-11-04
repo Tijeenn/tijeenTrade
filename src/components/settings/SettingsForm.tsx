@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Sol, SolIcon } from "@/components/Sol";
 import { age, sol } from "@/lib/format";
+import { syncScore } from "@/lib/account";
 import { DEFAULT_SETTINGS, SETTINGS, updateSettings, type Settings } from "@/lib/settings";
 import { getMarket, getRun, resetRun, wallMs } from "@/lib/store";
 
@@ -75,6 +76,7 @@ function NewRun() {
     const n = Number(amount);
     updateSettings({ startSol: n });
     resetRun(n);
+    syncScore().catch(() => {}); // the leaderboard shows the new run right away
     router.push("/");
   };
 

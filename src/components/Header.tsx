@@ -4,12 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signed, sol } from "@/lib/format";
 import { useMarket, useMounted } from "@/lib/store";
+import { AccountButton } from "./account/AccountButton";
 import { Sol } from "./Sol";
 
 const NAV = [
-  { href: "/", label: "Pulse" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/settings", label: "Settings" },
+  { href: "/", label: "Pulse", short: "Pulse" },
+  { href: "/portfolio", label: "Portfolio", short: "Folio" },
+  { href: "/leaderboard", label: "Leaderboard", short: "Ranks" },
+  { href: "/settings", label: "Settings", short: "⚙" },
 ];
 
 function Balance() {
@@ -47,7 +49,8 @@ export function Header() {
               href={n.href}
               className={`rounded-md px-2 py-1.5 sm:px-3 ${path === n.href ? "bg-panel-2 text-text" : "text-muted hover:text-text"}`}
             >
-              {n.label}
+              <span className="sm:hidden">{n.short}</span>
+              <span className="hidden sm:inline">{n.label}</span>
             </Link>
           ))}
         </nav>
@@ -57,6 +60,7 @@ export function Header() {
           Simulation · not real money
         </span>
         {mounted && <Balance />}
+        {mounted && <AccountButton />}
       </div>
     </header>
   );
