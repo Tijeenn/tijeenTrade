@@ -88,6 +88,13 @@ export interface UserTrade {
   mcapUsd: number;
   fee: number;
   priorityFee: number;
+  // Sells only: profit on the part sold (after all fees) vs. what it cost you.
+  pnlSol?: number;
+  pnlPct?: number;
+  soldPct?: number; // share of the bag this sell was
+  // Set when this sell closed the position: result of the whole trade.
+  positionPnlSol?: number;
+  positionPnlPct?: number;
 }
 
 export interface OrderRequest {
@@ -462,12 +469,18 @@ export class Market {
       const cost = pos.costSol * frac;
       pos.tokens -= tokens;
       pos.costSol -= cost;
-      pos.realizedSol += received - cost - o.priorityFeeSol;
+      const pnlSol = received - cost - o.priorityFeeSol;
+      pos.realizedSol += pnlSol;
       pos.soldSol += received;
       if (pos.tokens < 1) pos.tokens = 0;
       this.sol += received;
       this.positions.set(c.id, pos);
-      this.history.push({ ...base, status: "ok", sol: received, tokens, fee: q.fee + platformFee, mcapUsd: mcapUsd(c.r) });
+      const closed = pos.tokens === 0;
+      this.history.push({
+        ...base, status: "ok", sol: received, tokens, fee: q.fee + platformFee, mcapUsd: mcapUsd(c.r),
+        pnlSol, pnlPct: cost > 0 ? (pnlSol / cost) * 100 : 0, soldPct: frac * 100,
+        ...(closed && { positionPnlSol: pos.realizedSol, positionPnlPct: (pos.realizedSol / pos.boughtSol) * 100 }),
+      });
     }
   }
 

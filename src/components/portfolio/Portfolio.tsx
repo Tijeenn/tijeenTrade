@@ -120,7 +120,7 @@ function History({ m }: { m: Market }) {
   const rows = [...m.history].reverse();
   if (!rows.length) return <Empty text="No trades yet." />;
   return (
-    <table className="num w-full min-w-[640px] text-xs">
+    <table className="num w-full min-w-[760px] text-xs">
       <thead className="text-dim">
         <tr>
           <th className={th}>Time</th>
@@ -129,6 +129,7 @@ function History({ m }: { m: Market }) {
           <th className={th}>Amount</th>
           <th className={th}>Tokens</th>
           <th className={th}>MC</th>
+          <th className={th}>PnL</th>
           <th className={th}>Fees</th>
         </tr>
       </thead>
@@ -143,6 +144,9 @@ function History({ m }: { m: Market }) {
             <td className={td}>{h.status === "ok" ? <Sol>{sol(h.sol)}</Sol> : "–"}</td>
             <td className={td}>{h.status === "ok" ? tokens(h.tokens) : "–"}</td>
             <td className={td}><Sol>{mc(h.mcapUsd)}</Sol></td>
+            <td className={`${td} ${tone(h.pnlSol ?? 0)}`}>
+              {h.pnlSol === undefined ? "–" : <><Sol>{pnlSol(h.pnlSol)}</Sol> <span className="text-[11px]">({signed(h.pnlPct ?? 0, (x) => pct(x, 1))})</span></>}
+            </td>
             <td className={`${td} text-muted`}><Sol>{sol(h.fee + h.priorityFee, 4)}</Sol></td>
           </tr>
         ))}

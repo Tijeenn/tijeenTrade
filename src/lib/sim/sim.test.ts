@@ -120,6 +120,11 @@ describe("player orders", () => {
     expect(pos.tokens).toBe(0);
     expect(m.sol).toBeCloseTo(solBefore - 0.001 + sell.sol, 9);
     expect(pos.realizedSol).toBeCloseTo(sell.sol - 1.001 - 0.001, 9);
+    // the sell carries its own PnL, and closes the position
+    expect(sell.pnlSol).toBeCloseTo(pos.realizedSol, 9);
+    expect(sell.pnlPct).toBeCloseTo((pos.realizedSol / 1.001) * 100, 6);
+    expect(sell.soldPct).toBeCloseTo(100, 9);
+    expect(sell.positionPnlSol).toBeCloseTo(pos.realizedSol, 9);
     expect(m.equity()).toBeCloseTo(100 + pos.realizedSol, 9);
   });
 

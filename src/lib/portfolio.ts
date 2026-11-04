@@ -25,7 +25,7 @@ export interface PortfolioStats {
 }
 
 /** Average market cap you bought at, weighted by tokens. */
-function avgEntry(m: Market, coinId: string): number {
+export function avgEntry(m: Market, coinId: string): number {
   let w = 0, t = 0;
   for (const h of m.history) {
     if (h.coinId !== coinId || h.side !== "buy" || h.status !== "ok") continue;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { age, mc, pct, shortAddr, sol, tokens } from "@/lib/format";
+import { age, mc, pct, shortAddr, signed, sol, tokens } from "@/lib/format";
 import { TOTAL_SUPPLY } from "@/lib/sim/curve";
 import type { Coin, Market, WalletKind } from "@/lib/sim/market";
 import { Sol } from "@/components/Sol";
@@ -97,6 +97,7 @@ function MyTrades({ coin, m }: { coin: Coin; m: Market }) {
           <th className="font-normal">MC</th>
           <th className="font-normal">Amount</th>
           <th className="font-normal">Tokens</th>
+          <th className="font-normal">PnL</th>
           <th className="font-normal">Fees</th>
         </tr>
       </thead>
@@ -110,6 +111,9 @@ function MyTrades({ coin, m }: { coin: Coin; m: Market }) {
             <td><Sol>{mc(h.mcapUsd)}</Sol></td>
             <td>{h.status === "failed" ? "–" : sol(h.sol)}</td>
             <td>{h.status === "failed" ? h.reason : tokens(h.tokens)}</td>
+            <td className={(h.pnlSol ?? 0) > 0 ? "text-up" : (h.pnlSol ?? 0) < 0 ? "text-down" : "text-dim"}>
+              {h.pnlSol === undefined ? "–" : `${signed(h.pnlSol, (x) => sol(x))} (${signed(h.pnlPct ?? 0, (x) => pct(x, 1))})`}
+            </td>
             <td className="text-muted">{sol(h.fee + h.priorityFee, 4)}</td>
           </tr>
         ))}

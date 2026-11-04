@@ -1,11 +1,13 @@
 "use client";
 
 import {
-  CandlestickSeries, ColorType, createChart, createSeriesMarkers, HistogramSeries,
-  type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type SeriesMarker, type Time, type UTCTimestamp,
+  CandlestickSeries, ColorType, createChart, createSeriesMarkers, HistogramSeries, LineStyle,
+  type IChartApi, type IPriceLine, type ISeriesApi, type ISeriesMarkersPluginApi, type SeriesMarker, type Time,
+  type UTCTimestamp,
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
-import { compact, usdToSol } from "@/lib/format";
+import { compact, pct, signed, sol, usdToSol } from "@/lib/format";
+import { avgEntry } from "@/lib/portfolio";
 import type { Coin, Market } from "@/lib/sim/market";
 import { wallMs } from "@/lib/store";
 
@@ -19,6 +21,7 @@ const TIMEFRAMES = [
 
 const UP = "#1fe3a0";
 const DOWN = "#ff4b6b";
+const BRAND = "#7b6cff";
 
 interface Bar {
   time: UTCTimestamp;
@@ -63,6 +66,7 @@ export function Chart({ coin, m }: { coin: Coin; m: Market }) {
     key: string;
     lastT: number;
     markerCount: number;
+    entryLine: IPriceLine | null;
   } | null>(null);
   const [tf, setTf] = useState(1);
 
@@ -84,7 +88,7 @@ export function Chart({ coin, m }: { coin: Coin; m: Market }) {
       priceScaleId: "", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false,
     });
     chart.priceScale("").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-    api.current = { chart, candles, volume, markers: createSeriesMarkers(candles, []), key: "", lastT: 0, markerCount: -1 };
+    api.current = { chart, candles, volume, markers: createSeriesMarkers(candles, []), key: "", lastT: 0, markerCount: -1, entryLine: null };
     return () => {
       chart.remove();
       api.current = null;
@@ -117,14 +121,31 @@ export function Chart({ coin, m }: { coin: Coin; m: Market }) {
     if (mine.length !== a.markerCount) {
       a.markerCount = mine.length;
       const epoch = wallMs(0) / 1000;
-      const markers: SeriesMarker<Time>[] = mine.map((h) => ({
-        time: (Math.floor((epoch + h.t / 1000) / tf) * tf) as UTCTimestamp,
-        position: h.side === "buy" ? "belowBar" : "aboveBar",
-        shape: h.side === "buy" ? "arrowUp" : "arrowDown",
-        color: h.side === "buy" ? UP : DOWN,
-        text: h.side === "buy" ? "B" : "S",
-      }));
+      // Buys: green arrow under the candle. Sells: arrow above, coloured by whether you made money.
+      const markers: SeriesMarker<Time>[] = mine.map((h) => {
+        const time = (Math.floor((epoch + h.t / 1000) / tf) * tf) as UTCTimestamp;
+        if (h.side === "buy") {
+          return { time, position: "belowBar", shape: "arrowUp", color: UP, size: 2, text: `BUY ${sol(h.sol)}` };
+        }
+        const pnl = h.pnlSol ?? 0;
+        return {
+          time, position: "aboveBar", shape: "arrowDown", color: pnl >= 0 ? UP : DOWN, size: 2,
+          text: `SELL ${signed(h.pnlPct ?? 0, (x) => pct(x, 0))}`,
+        };
+      });
       a.markers.setMarkers(markers);
+    }
+
+    // Dashed line at your average entry while you hold the coin.
+    const holding = (m.positions.get(coin.id)?.tokens ?? 0) > 0;
+    const entry = holding ? usdToSol(avgEntry(m, coin.id)) : 0;
+    if (entry > 0) {
+      const opts = { price: entry, color: BRAND, lineWidth: 1 as const, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "Avg entry" };
+      if (a.entryLine) a.entryLine.applyOptions(opts);
+      else a.entryLine = a.candles.createPriceLine(opts);
+    } else if (a.entryLine) {
+      a.candles.removePriceLine(a.entryLine);
+      a.entryLine = null;
     }
   });
 
