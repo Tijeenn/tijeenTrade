@@ -11,6 +11,7 @@ import { useMarket } from "@/lib/store";
 import { Chart } from "./Chart";
 import { CoinTables } from "./Tables";
 import { DevPanel } from "./DevPanel";
+import { AutoSell } from "./AutoSell";
 import { PositionBox, TradePanel } from "./TradePanel";
 import { Sol } from "@/components/Sol";
 
@@ -120,6 +121,7 @@ export function CoinView({ id }: { id: string }) {
         {coin.mine && <DevPanel coin={coin} m={m} />}
         <TradePanel coin={coin} m={m} />
         <PositionBox coin={coin} m={m} />
+        <AutoSell coin={coin} m={m} />
         <TokenInfo coin={coin} m={m} />
       </aside>
     </div>

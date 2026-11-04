@@ -41,7 +41,7 @@ function SellToast({ t }: { t: UserTrade }) {
         <span className="font-semibold text-muted">
           {t.note === "rug"
             ? `You rugged $${t.ticker}`
-            : `Sold ${t.soldPct !== undefined && t.soldPct < 99.9 ? `${pct(t.soldPct)} of ` : ""}$${t.ticker}`}
+            : `${t.bot ? `🤖 ${t.bot} sold` : "Sold"} ${t.soldPct !== undefined && t.soldPct < 99.9 ? `${pct(t.soldPct)} of ` : ""}$${t.ticker}`}
         </span>
         {tag && <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${win ? "bg-up/20 text-up" : "bg-down/20 text-down"}`}>{tag}</span>}
       </div>
@@ -83,7 +83,7 @@ function BuyToast({ t }: { t: UserTrade }) {
   }
   return (
     <div className="rounded-lg border border-up/40 bg-panel-2 px-3 py-2 text-sm shadow-xl">
-      <div className="font-medium text-up">Bought {tokens(t.tokens)} ${t.ticker}</div>
+      <div className="font-medium text-up">{t.bot ? `🤖 ${t.bot} bought` : "Bought"} {tokens(t.tokens)} ${t.ticker}</div>
       <div className="flex flex-wrap gap-x-2 text-xs text-muted">
         <span>for <Sol size={10}>{sol(t.sol)}</Sol></span>
         <span>at MC <Sol size={10}>{mc(t.mcapUsd)}</Sol></span>
@@ -97,7 +97,7 @@ function FailedToast({ t }: { t: UserTrade }) {
   return (
     <div className="rounded-lg border border-down/50 bg-panel-2 px-3 py-2 text-sm shadow-xl">
       <div className="font-medium text-down">
-        {t.side === "buy" ? "Buy" : "Sell"} failed · ${t.ticker}
+        {t.bot ? `🤖 ${t.bot}: ` : ""}{t.side === "buy" ? "Buy" : "Sell"} failed · ${t.ticker}
       </div>
       <div className="text-xs text-muted">
         {t.reason}. Priority fee spent: <Sol size={10}>{sol(t.priorityFee, 4)}</Sol>

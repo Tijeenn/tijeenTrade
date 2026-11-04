@@ -27,6 +27,7 @@ export interface Plan {
   devSellFrac?: number;
   devSol: number; // dev buy at creation
   bundleWallets: number;
+  stealth?: boolean; // rug whose insider wallets don't show up as a bundle
   bundleSol: number;
   snipers: number;
   kolAt?: number;
@@ -55,7 +56,7 @@ export function playerArchetype(rng: Rng, socials: Plan["socials"], devBuySol: n
 }
 
 export function makePlan(rng: Rng, archetype: Archetype = rng.weighted(ARCHETYPE_ODDS)): Plan {
-  const socialChance = { dud: 0.35, rug: 0.45, pumpdump: 0.6, runner: 0.8, moon: 0.9 }[archetype];
+  const socialChance = { dud: 0.45, rug: 0.55, pumpdump: 0.6, runner: 0.8, moon: 0.9 }[archetype];
   const socials = {
     x: rng.chance(socialChance),
     tg: rng.chance(socialChance * 0.7),
@@ -75,7 +76,8 @@ export function makePlan(rng: Rng, archetype: Archetype = rng.weighted(ARCHETYPE
     devSol,
     bundleWallets,
     bundleSol,
-    snipers: rng.int(2, 14),
+    snipers: rng.int(4, 20),
+    stealth: archetype === "rug" && rng.chance(0.3),
     shape: between(rng, 0.6, 1.6),
   };
 

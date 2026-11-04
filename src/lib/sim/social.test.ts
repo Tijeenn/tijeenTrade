@@ -51,7 +51,7 @@ describe("posting as yourself", () => {
     expect(findCoin(m, c.ticker)).toBe(c);
     expect(res.tweet.links[c.ticker]).toBe(c.id);
     expect(res.tweet.apes!).toBeGreaterThan(10);
-    expect(c.scheduled.length - scheduledBefore).toBe(res.tweet.apes);
+    expect(c.scheduled.length - scheduledBefore).toBeGreaterThanOrEqual(res.tweet.apes!); // fast bots also queue a sell
     expect(c.hypedBy).toBe("you");
   });
 

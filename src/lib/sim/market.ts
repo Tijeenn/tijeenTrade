@@ -7,7 +7,8 @@ import { activity, makePlan, playerArchetype, targetMcap, type Plan } from "./pl
 import { Rng } from "./rng";
 
 export type Side = "buy" | "sell";
-export type WalletKind = "dev" | "bundle" | "sniper" | "kol" | "trader" | "you";
+/** "insider" = a rug's hidden wallets: they look like normal traders to you. */
+export type WalletKind = "dev" | "bundle" | "insider" | "sniper" | "kol" | "trader" | "you";
 
 export interface Trade {
   t: number; // sim ms
@@ -101,6 +102,7 @@ export interface UserTrade {
   positionPnlSol?: number;
   positionPnlPct?: number;
   note?: "launch" | "rug";
+  bot?: string; // placed by one of your bots
 }
 
 /** pump.fun charges a small fee to create a coin. */
@@ -120,6 +122,7 @@ export interface OrderRequest {
   amount: number; // SOL for buys, tokens for sells
   slippagePct: number;
   priorityFeeSol: number;
+  tag?: string; // which bot placed it, shown on the fill
 }
 
 interface PendingOrder extends OrderRequest {
@@ -154,7 +157,9 @@ function addToCandles(arr: Candle[], t: number, m: number, sol: number, max: num
 }
 const SUBSTEP_MS = 100;
 /** How long social hype lingers (time constant, seconds). */
-const BOOST_FADE_SEC = 90;
+const BOOST_FADE_SEC = 35;
+/** Share of post-driven buyers that are other bots (fast in, fast out). */
+const FAST_BOT_SHARE = 0.5;
 /** Trading-terminal fee on your trades (like Axiom/BullX), on top of the curve/pool fee. */
 export const PLATFORM_FEE = 0.01;
 
@@ -203,7 +208,7 @@ export class Market {
     const c = this.newCoin(plan, name, ticker, rng.int(0, 359), dev);
     if (plan.devSol > 0) this.buy(c, dev, plan.devSol);
     for (let i = 0; i < plan.bundleWallets; i++) {
-      const w = this.newWallet(c, "bundle");
+      const w = this.newWallet(c, plan.stealth ? "insider" : "bundle");
       this.buy(c, w, (plan.bundleSol / plan.bundleWallets) * rng.range(0.6, 1.4));
     }
     c.startMcap = mcapUsd(c.r);
@@ -221,13 +226,19 @@ export class Market {
     c.boost += h.strength;
     c.hypedAt = this.time;
     c.hypedBy = h.by;
+    const rng = this.rng;
     for (let i = 0; i < h.buyers; i++) {
-      const delaySec = Math.min(60, this.rng.logNormal(6, 0.8));
-      c.scheduled.push({
-        at: this.time + 500 + delaySec * 1000,
-        wallet: this.newWallet(c, "trader"),
-        buySol: Math.max(0.01, this.rng.logNormal(h.avgBuySol, 0.8)),
-      });
+      const w = this.newWallet(c, "trader");
+      const buySol = Math.max(0.01, rng.logNormal(h.avgBuySol, 0.8));
+      if (rng.chance(FAST_BOT_SHARE)) {
+        // other people's bots watch the same feed: in within a second, out on the followers
+        const at = this.time + rng.range(150, 1200);
+        c.scheduled.push({ at, wallet: w, buySol: buySol * 1.5 });
+        c.scheduled.push({ at: at + rng.range(2, 15) * 1000, wallet: w, sellFrac: 1 });
+      } else {
+        const delaySec = Math.min(60, rng.logNormal(6, 0.8));
+        c.scheduled.push({ at: this.time + 500 + delaySec * 1000, wallet: w, buySol });
+      }
     }
     c.scheduled.sort((a, b) => a.at - b.at);
   }
@@ -312,7 +323,8 @@ export class Market {
     const at = (sec: number) => c.createdAt + sec * 1000;
     for (let i = 0; i < plan.snipers; i++) {
       const w = this.newWallet(c, "sniper");
-      c.scheduled.push({ at: at(rng.range(0.2, 1.5)), wallet: w, buySol: rng.logNormal(0.8, 0.6) });
+      // real snipers land in the creation block or the next couple
+      c.scheduled.push({ at: at(rng.range(0.05, 0.6)), wallet: w, buySol: rng.logNormal(0.7, 0.5) });
       c.scheduled.push({ at: at(rng.range(3, 45)), wallet: w, sellFrac: 1 });
     }
     if (plan.devSellAt !== undefined)
@@ -320,7 +332,8 @@ export class Market {
     if (plan.rugAt !== undefined) {
       c.scheduled.push({ at: at(plan.rugAt), wallet: dev, sellFrac: 1 });
       for (const [w, k] of c.kinds)
-        if (k === "bundle") c.scheduled.push({ at: at(plan.rugAt + rng.range(0, 2)), wallet: w, sellFrac: 1 });
+        if (k === "bundle" || k === "insider")
+          c.scheduled.push({ at: at(plan.rugAt + rng.range(0, 2)), wallet: w, sellFrac: 1 });
     }
     if (plan.kolAt !== undefined) {
       const w = this.newWallet(c, "kol");
@@ -410,7 +423,7 @@ export class Market {
     for (let tries = 0, got = 0; tries < 8 && got < (weighted ? 3 : 1); tries++) {
       const w = list[Math.floor(this.rng.next() * list.length)];
       const k = c.kinds.get(w);
-      if (k === "you" || k === "dev" || k === "kol" || (protectInsiders && k === "bundle")) continue;
+      if (k === "you" || k === "dev" || k === "kol" || (protectInsiders && (k === "bundle" || k === "insider"))) continue;
       got++;
       if (!best || c.holders.get(w)! > c.holders.get(best)!) best = w;
     }
@@ -508,7 +521,8 @@ export class Market {
       req.side === "buy"
         ? quoteBuy(c.r, req.amount * (1 - PLATFORM_FEE)).tokensOut
         : quoteSell(c.r, req.amount).solOut * (1 - PLATFORM_FEE);
-    const latency = this.rng.range(150, 500) + 400 * Math.exp(-req.priorityFeeSol / 0.001) * this.rng.next();
+    // Retail orders land 1-3 slots later; a bigger priority fee skips most of the queue.
+    const latency = this.rng.range(300, 800) + 1000 * Math.exp(-req.priorityFeeSol / 0.002) * this.rng.next();
     const id = this.nextId++;
     this.pending.push({ ...req, id, executeAt: this.time + latency, minOut: quote * (1 - req.slippagePct / 100) });
     return { ok: true, id };
@@ -526,7 +540,7 @@ export class Market {
     const c = this.coins.get(o.coinId)!;
     const base = {
       id: o.id, t: this.time, coinId: c.id, ticker: c.ticker, side: o.side,
-      mcapUsd: mcapUsd(c.r), priorityFee: o.priorityFeeSol,
+      mcapUsd: mcapUsd(c.r), priorityFee: o.priorityFeeSol, ...(o.tag && { bot: o.tag }),
     };
     const pos = this.positions.get(c.id) ?? {
       coinId: c.id, ticker: c.ticker, tokens: 0, costSol: 0, realizedSol: 0, boughtSol: 0, soldSol: 0,

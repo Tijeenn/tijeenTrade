@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Market } from "./sim/market";
 import { restore, snapshot, type MarketSave } from "./sim/persist";
+import { Bots, DEFAULT_BOTS, type BotsConfig, type BotsSave } from "./sim/bots";
 import { Social, type SocialSave } from "./sim/social";
 import { SETTINGS } from "./settings";
 
@@ -27,10 +28,40 @@ interface SaveFile {
   run: Run;
   market: MarketSave;
   social?: SocialSave;
+  bots?: BotsSave;
 }
 
 let market: Market | null = null;
 let social = new Social(Math.floor(Math.random() * 2 ** 31));
+const BOTS_KEY = "tijeen.bots.v1";
+let bots = new Bots(loadBotsConfig());
+
+/** Bot settings live in this browser (like the trading settings), separate from the run. */
+function loadBotsConfig(): BotsConfig {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(BOTS_KEY) : null;
+    if (!raw) return DEFAULT_BOTS;
+    const saved = JSON.parse(raw) as Partial<BotsConfig>;
+    // merge so settings added later get their defaults
+    return {
+      sniper: { ...DEFAULT_BOTS.sniper, ...saved.sniper, exit: { ...DEFAULT_BOTS.sniper.exit, ...saved.sniper?.exit } },
+      posts: { ...DEFAULT_BOTS.posts, ...saved.posts, exit: { ...DEFAULT_BOTS.posts.exit, ...saved.posts?.exit } },
+      migration: { ...DEFAULT_BOTS.migration, ...saved.migration, exit: { ...DEFAULT_BOTS.migration.exit, ...saved.migration?.exit } },
+    };
+  } catch {
+    return DEFAULT_BOTS;
+  }
+}
+
+/** Change bot settings (takes effect on the next tick) and remember them. */
+export function updateBots(next: BotsConfig): void {
+  bots.config = structuredClone(next);
+  try {
+    localStorage.setItem(BOTS_KEY, JSON.stringify(next));
+  } catch {
+    /* storage unavailable */
+  }
+}
 let run: Run = { startedAt: 0, equity: [] };
 let epochMs = 0;
 
@@ -59,7 +90,7 @@ function readSave(): SaveFile | null {
 
 export function save(): void {
   if (!market) return;
-  const file: SaveFile = { run, market: snapshot(market), social: social.save(market.time) };
+  const file: SaveFile = { run, market: snapshot(market), social: social.save(market.time), bots: bots.save(market.time) };
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(file));
   } catch {
@@ -81,6 +112,7 @@ function startLoop() {
     const now = performance.now();
     market!.step(Math.min(now - last, MAX_CATCHUP_MS));
     social.step(market!);
+    bots.step(market!, social);
     last = now;
     if (now - lastEquity >= EQUITY_EVERY_MS) {
       lastEquity = now;
@@ -107,6 +139,7 @@ export function getMarket(): Market {
       restore(market, saved.market);
       run = saved.run;
       if (saved.social) social.load(saved.social, market.time);
+      if (saved.bots) bots.load(saved.bots, market.time);
     } catch {
       market = freshMarket(SETTINGS.startSol, social); // corrupt save: start over
       run = { startedAt: Date.now(), equity: [[Date.now(), market.startSol]] };
@@ -117,6 +150,12 @@ export function getMarket(): Market {
   }
   startLoop();
   return market;
+}
+
+/** Your trading bots for this tab. */
+export function getBots(): Bots {
+  getMarket();
+  return bots;
 }
 
 /** Simulated crypto Twitter for this tab. */
@@ -137,6 +176,7 @@ export function resetRun(startSol: number): void {
   social = new Social(Math.floor(Math.random() * 2 ** 31));
   market = freshMarket(startSol, social);
   social.load(account, market.time);
+  bots = new Bots(bots.config); // fresh stats for the new run, same settings
   run = { startedAt: Date.now(), equity: [[Date.now(), startSol]] };
   save();
 }

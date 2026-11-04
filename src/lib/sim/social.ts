@@ -161,8 +161,8 @@ export class Social {
       const text = fill(rng.pick(tier === "kol" ? KOL_SHILL : DEGEN_SHILL), { T: c.ticker });
       const reach = Math.log10(acc.followers);
       m.hype(c.id, {
-        strength: tier === "kol" ? rng.range(0.25, 0.7) : rng.range(0.05, 0.15),
-        buyers: Math.round((tier === "kol" ? rng.range(8, 25) : rng.range(2, 6)) * (reach / 6)),
+        strength: tier === "kol" ? rng.range(0.15, 0.45) : rng.range(0.05, 0.15),
+        buyers: Math.round((tier === "kol" ? rng.range(5, 18) : rng.range(2, 6)) * (reach / 6)),
         avgBuySol: tier === "kol" ? 0.4 : 0.2,
         by: acc.id,
       });
