@@ -75,3 +75,79 @@ export async function fetchPlayers(): Promise<Player[]> {
   );
   return rows.map(normalize);
 }
+
+// ---------- shared (multiplayer) coins ----------
+
+export interface SharedCoinRow {
+  id: string;
+  name: string;
+  ticker: string;
+  hue: number;
+  socials: { x: boolean; tg: boolean; web: boolean };
+  creator: string;
+  created_at: string;
+  phase: "curve" | "graduated";
+  r_sol: number;
+  r_tok: number;
+  tokens_sold: number;
+  real_sol: number;
+  crowd_tokens: number;
+  rugged_at: string | null;
+  last_trade_at: string;
+  ath_mcap_sol: number;
+  volume_sol: number;
+  buys: number;
+  sells: number;
+}
+
+export interface SharedTradeRow {
+  id: number;
+  coin_id: string;
+  at: string;
+  username: string | null; // null = simulated crowd
+  side: "buy" | "sell";
+  sol: number;
+  tokens: number;
+  mcap_sol: number;
+}
+
+export interface SharedHoldingRow {
+  coin_id: string;
+  username: string;
+  tokens: number;
+  cost_sol: number;
+}
+
+const post = (body: object) => ({ method: "POST", body: JSON.stringify(body), headers: { Prefer: "return=representation" } });
+
+/** Recent public coins, with the simulated crowd caught up to now. */
+export const fetchSharedMarket = () => call<SharedCoinRow[]>("rpc/shared_market", post({}));
+
+/** Trades after `sinceId`; with no id yet, the latest 2000. Oldest first. */
+export async function fetchSharedTrades(sinceId: number | null): Promise<SharedTradeRow[]> {
+  if (sinceId === null) {
+    const rows = await call<SharedTradeRow[]>("shared_trades?select=*&order=id.desc&limit=2000");
+    return rows.reverse();
+  }
+  return call<SharedTradeRow[]>(`shared_trades?select=*&id=gt.${sinceId}&order=id.asc&limit=2000`);
+}
+
+export function fetchSharedHoldings(coinIds: string[]): Promise<SharedHoldingRow[]> {
+  if (!coinIds.length) return Promise.resolve([]);
+  return call<SharedHoldingRow[]>(`shared_holdings?select=*&tokens=gt.0&coin_id=in.(${coinIds.join(",")})`);
+}
+
+export const launchShared = (p: {
+  username: string; name: string; ticker: string; hue: number; socials: object; devBuySol: number;
+}) =>
+  call<{ id: string; tokens: number; sol: number; mcap_sol: number }>("rpc/launch_shared", post({
+    p_username: p.username, p_name: p.name, p_ticker: p.ticker, p_hue: p.hue, p_socials: p.socials, p_dev_buy_sol: p.devBuySol,
+  }));
+
+export const tradeShared = (username: string, coin: string, side: "buy" | "sell", amount: number, minOut: number) =>
+  call<{ tokens: number; sol: number; fee: number; mcap_sol: number; rug: boolean }>("rpc/trade_shared", post({
+    p_username: username, p_coin: coin, p_side: side, p_amount: amount, p_min_out: minOut,
+  }));
+
+export const hypeShared = (username: string, coin: string, buyers: number) =>
+  call<null>("rpc/hype_shared", post({ p_username: username, p_coin: coin, p_buyers: buyers }));

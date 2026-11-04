@@ -7,6 +7,8 @@ import { TokenAvatar } from "@/components/TokenAvatar";
 import { mc, pct, sol } from "@/lib/format";
 import { applyBuy, mcapUsd, newReserves, quoteBuy, TOTAL_SUPPLY } from "@/lib/sim/curve";
 import { CREATE_FEE_SOL } from "@/lib/sim/market";
+import { useUsername } from "@/lib/account";
+import { launchPublic } from "@/lib/shared";
 import { getMarket, useMarket } from "@/lib/store";
 
 const DEV_PRESETS = [0, 0.5, 1, 2, 5];
@@ -45,6 +47,10 @@ export function CreateCoin() {
   const [socials, setSocials] = useState({ x: true, tg: false, web: false });
   const [devBuy, setDevBuy] = useState("0.5");
   const [error, setError] = useState<string>();
+  const username = useUsername();
+  const [publicPick, setIsPublic] = useState(true);
+  const isPublic = publicPick && !!username;
+  const [busy, setBusy] = useState(false);
 
   const dev = Number(devBuy);
   const devOk = devBuy === "" || (Number.isFinite(dev) && dev >= 0);
@@ -53,7 +59,18 @@ export function CreateCoin() {
   const shownTicker = ticker.trim().toUpperCase() || "TICKER";
   const valid = name.trim().length > 0 && /^[A-Za-z0-9]{1,10}$/.test(ticker.trim()) && devOk && total <= m.sol;
 
-  const launch = () => {
+  const launch = async () => {
+    if (isPublic) {
+      setBusy(true);
+      try {
+        const id = await launchPublic({ name: name.trim(), ticker: ticker.trim(), hue, socials, devBuySol: dev || 0 });
+        router.push(`/coin/${id}`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Launch failed");
+        setBusy(false);
+      }
+      return;
+    }
     const res = getMarket().launch({ name, ticker, hue, socials, devBuySol: dev || 0 });
     if (!res.ok) return setError(res.reason);
     router.push(`/coin/${res.coinId}`);
@@ -114,6 +131,23 @@ export function CreateCoin() {
         </div>
 
         <div>
+          <Label hint="Public coins are on every player's Pulse feed: they can buy it, and get rugged by you">Who can trade it</Label>
+          <div className="mb-5 flex flex-wrap gap-2">
+            <button
+              onClick={() => setIsPublic(true)}
+              disabled={!username}
+              className={`rounded-md border px-3 py-1.5 text-sm disabled:opacity-40 ${isPublic ? "border-brand bg-brand/15" : "border-line-2 text-muted"}`}
+            >
+              🌍 Public (all players)
+            </button>
+            <button
+              onClick={() => setIsPublic(false)}
+              className={`rounded-md border px-3 py-1.5 text-sm ${!isPublic ? "border-brand bg-brand/15" : "border-line-2 text-muted"}`}
+            >
+              🔒 Just my market
+            </button>
+            {!username && <span className="self-center text-xs text-dim">Log in to launch public coins</span>}
+          </div>
           <Label hint="Bought in the same transaction as the launch, before any sniper">Dev buy</Label>
           <div className="flex flex-wrap items-center gap-2">
             {DEV_PRESETS.map((p) => (
@@ -164,11 +198,11 @@ export function CreateCoin() {
         </div>
 
         <button
-          disabled={!valid}
+          disabled={!valid || busy}
           onClick={launch}
           className="rounded-md bg-up py-3 font-bold text-bg disabled:opacity-40"
         >
-          🚀 Launch {shownTicker}
+          {busy ? "Launching…" : `🚀 Launch ${shownTicker}${isPublic ? " for everyone" : ""}`}
         </button>
         {total > m.sol && <div className="text-xs text-down">Not enough SOL.</div>}
         {error && <div className="text-xs text-down">{error}</div>}

@@ -29,7 +29,7 @@ export function snapshot(m: Market): MarketSave {
   const coins: SavedCoin[] = [];
   for (const p of m.positions.values()) {
     const c = m.coins.get(p.coinId);
-    if (!c || p.tokens <= 0) continue;
+    if (!c || p.tokens <= 0 || c.shared) continue; // shared coins come back from the server
     const { holders, kinds, holderList: _l, holderIdx: _i, ...rest } = c;
     void _l;
     void _i;

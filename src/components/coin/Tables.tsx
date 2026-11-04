@@ -18,7 +18,9 @@ function Maker({ wallet, kind }: { wallet: string; kind?: WalletKind }) {
   const l = kind && LABEL[kind];
   return (
     <span className="flex items-center gap-1.5">
-      <span className="text-muted">{wallet === "you" ? "You" : shortAddr(wallet)}</span>
+      <span className="text-muted">
+        {wallet === "you" ? "You" : wallet === "crowd" ? "Traders (sim)" : wallet.startsWith("@") ? wallet : shortAddr(wallet)}
+      </span>
       {l && <span className={`rounded px-1 text-[9px] font-bold ${l.cls}`}>{l.text}</span>}
     </span>
   );

@@ -149,7 +149,7 @@ export class Bots {
     for (const c of m.coins.values()) {
       if (this.seen.has(c.id)) continue;
       this.seen.add(c.id);
-      if (!cfg.enabled || c.mine) continue;
+      if (!cfg.enabled || c.mine || c.shared) continue; // bots only trade your local market
       const st = coinStats(c, m.time);
       if (st.ageSec > cfg.maxAgeSec) continue;
       const startSol = c.startMcap / SOL_USD;
@@ -180,7 +180,7 @@ export class Bots {
       const targets = [...(t.pumped ?? []).map((p) => p.coinId), ...Object.values(t.links)];
       for (const id of new Set(targets)) {
         const c = m.coins.get(id);
-        if (!c || c.dead || c.mine) continue;
+        if (!c || c.dead || c.mine || c.shared) continue;
         this.buy(m, "posts", id, c.ticker, `@${acc.id} posted`);
       }
     }
@@ -190,7 +190,7 @@ export class Bots {
     const cfg = this.config.migration;
     if (!cfg.enabled) return;
     for (const c of m.coins.values()) {
-      if (c.graduatedAt === undefined || c.graduatedAt <= this.lastScan || c.mine) continue;
+      if (c.graduatedAt === undefined || c.graduatedAt <= this.lastScan || c.mine || c.shared) continue;
       this.buy(m, "migration", c.id, c.ticker, "just migrated");
     }
   }
@@ -235,6 +235,7 @@ export class Bots {
 
   private exits(m: Market) {
     for (const [coinId, g] of this.managed) {
+      if (m.coins.get(coinId)?.shared) continue; // shared coins are settled by the server, not here
       const pos = m.positions.get(coinId);
       const pendingBuy = m.pending.some((o) => o.coinId === coinId && o.side === "buy");
       if (!pos || pos.tokens <= 0) {

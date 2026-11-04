@@ -162,7 +162,8 @@ export class Social {
 
   private botTweet(m: Market) {
     const rng = this.rng;
-    const live = [...m.coins.values()].filter((c) => !c.dead && c.ruggedAt === undefined);
+    // influencers only move your local market; shared coins are moved by real players
+    const live = [...m.coins.values()].filter((c) => !c.dead && c.ruggedAt === undefined && !c.shared);
     const kind = rng.weighted({
       persona: 0.62,
       detective: 0.14,

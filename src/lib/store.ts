@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Market } from "./sim/market";
+import { Market, type OrderRequest } from "./sim/market";
 import { restore, snapshot, type MarketSave } from "./sim/persist";
 import { Bots, DEFAULT_BOTS, type BotsConfig, type BotsSave } from "./sim/bots";
 import { Social, type SocialSave } from "./sim/social";
@@ -199,8 +199,28 @@ export interface TradeOpts {
   priorityFeeSol?: number;
 }
 
+/** Sim time for a wall-clock timestamp (e.g. a server time). */
+export const toSimMs = (wall: number) => wall - epochMs;
+
+type OrderResult = { ok: true; id: number } | { ok: false; reason: string };
+let sharedSubmit: ((req: OrderRequest) => OrderResult) | null = null;
+
+/** The multiplayer module settles orders on shared coins through the server. */
+export function setSharedSubmit(fn: (req: OrderRequest) => OrderResult) {
+  sharedSubmit = fn;
+}
+
+/** Local coins fill in the sim; shared (public) coins are settled by the server. */
+function submit(req: OrderRequest): OrderResult {
+  const m = getMarket();
+  if (m.coins.get(req.coinId)?.shared) {
+    return sharedSubmit ? sharedSubmit(req) : { ok: false, reason: "Public coins are still loading" };
+  }
+  return m.submit(req);
+}
+
 export function buy(coinId: string, solAmount: number, o: TradeOpts = {}) {
-  return getMarket().submit({
+  return submit({
     coinId, side: "buy", amount: solAmount,
     slippagePct: o.slippagePct ?? SETTINGS.slippagePct,
     priorityFeeSol: o.priorityFeeSol ?? SETTINGS.priorityFeeSol,
@@ -216,7 +236,7 @@ export function sellPct(coinId: string, pctOfBag: number, o: TradeOpts = {}) {
     .reduce((s, p) => s + p.amount, 0);
   const free = held - pending;
   if (free <= 0) return { ok: false as const, reason: "Nothing to sell" };
-  return m.submit({
+  return submit({
     coinId, side: "sell", amount: pctOfBag >= 100 ? free : (held * pctOfBag) / 100,
     slippagePct: o.slippagePct ?? SETTINGS.slippagePct,
     priorityFeeSol: o.priorityFeeSol ?? SETTINGS.priorityFeeSol,

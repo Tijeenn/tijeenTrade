@@ -102,6 +102,11 @@ export function CoinView({ id }: { id: string }) {
                 {age(s.ageSec * 1000)} old
                 {s.graduated && <span className="ml-2 rounded bg-up/15 px-1 text-up">Migrated</span>}
                 {coin.dead && <span className="ml-2 rounded bg-line-2 px-1 text-muted">Inactive</span>}
+                {coin.shared && (
+                  <span className="ml-2 rounded bg-sky-500/15 px-1 font-semibold text-sky-400" title="Every player sees and trades this same coin">
+                    🌍 Public coin by {coin.mine ? "you" : "@" + coin.shared.creator}
+                  </span>
+                )}
                 {m.meta && coin.themes.includes(m.meta.word) && (
                   <span className="ml-2 rounded bg-orange-500/20 px-1 font-bold text-orange-400">🔥 {m.meta.word.toUpperCase()} META</span>
                 )}
@@ -131,7 +136,7 @@ export function CoinView({ id }: { id: string }) {
         {coin.mine && <DevPanel coin={coin} m={m} />}
         <TradePanel coin={coin} m={m} />
         <PositionBox coin={coin} m={m} />
-        <AutoSell coin={coin} m={m} />
+        {!coin.shared && <AutoSell coin={coin} m={m} />}
         <TokenInfo coin={coin} m={m} />
       </aside>
     </div>

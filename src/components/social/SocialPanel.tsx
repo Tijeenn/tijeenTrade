@@ -5,6 +5,7 @@ import { useUsername } from "@/lib/account";
 import { count, pct, plural, signed } from "@/lib/format";
 import type { Market } from "@/lib/sim/market";
 import type { Social } from "@/lib/sim/social";
+import { hypeFromPost } from "@/lib/shared";
 import { getSocial, useMarket } from "@/lib/store";
 import { Avatar, TweetCard } from "./Tweet";
 
@@ -41,6 +42,7 @@ function Composer({ m, s, name }: { m: Market; s: Social; name: string }) {
   const post = () => {
     const res = s.post(m, text, pnlCoin || undefined);
     if (!res.ok) return setResult({ ok: false, msg: res.reason });
+    hypeFromPost(res.tweet); // followers ape public coins on the server, for every player
     const t = res.tweet;
     setResult({
       ok: true,

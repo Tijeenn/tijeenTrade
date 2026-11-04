@@ -129,6 +129,11 @@ export function CoinCard({ coin, m }: { coin: Coin; m: Market }) {
               <span title="Buys / sells">
                 <span className="text-up">{s.buys}</span>/<span className="text-down">{s.sells}</span>
               </span>
+              {coin.shared && (
+                <span className="rounded bg-sky-500/20 px-1 text-[10px] font-semibold text-sky-400" title={`Public coin by @${coin.shared.creator}: every player trades it`}>
+                  🌍 LIVE
+                </span>
+              )}
               {coin.mine ? (
                 <span className="rounded bg-warn/20 px-1 text-[10px] font-semibold text-warn">YOUR COIN</span>
               ) : (

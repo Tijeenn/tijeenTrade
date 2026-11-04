@@ -70,6 +70,7 @@ export interface Coin {
   themes: string[]; // metas this coin belongs to (e.g. "Cat")
   devProfile?: DevProfile; // the creator's track record (shared across their coins)
   rugCounted?: boolean;
+  shared?: { uuid: string; creator: string }; // a player's public coin, settled by the server
   dead: boolean;
   scheduled: Action[];
 }
@@ -125,6 +126,28 @@ export interface Meta {
   word: string;
   startedAt: number; // sim ms
   until: number;
+}
+
+/** A shared coin as the server reports it, with times already converted to sim ms. */
+export interface SharedState {
+  uuid: string;
+  creator: string;
+  name: string;
+  ticker: string;
+  hue: number;
+  socials: { x: boolean; tg: boolean; web: boolean };
+  createdAt: number;
+  phase: "curve" | "graduated";
+  rSol: number;
+  rTok: number;
+  tokensSold: number;
+  realSol: number;
+  ruggedAt?: number;
+  athMcapUsd: number;
+  volumeSol: number;
+  buys: number;
+  sells: number;
+  lastTradeAt: number;
 }
 
 /** pump.fun charges a small fee to create a coin. */
@@ -225,7 +248,7 @@ export class Market {
         this.spawn();
         this.nextSpawnAt += this.rng.range(0.25, 1.75) * this.opts.spawnEverySec * 1000;
       }
-      for (const c of this.coins.values()) if (!c.dead) this.tickCoin(c, sub / 1000);
+      for (const c of this.coins.values()) if (!c.dead && !c.shared) this.tickCoin(c, sub / 1000);
       this.executeOrders();
     }
     this.prune();
@@ -322,9 +345,9 @@ export class Market {
     return { ok: true, coinId: c.id };
   }
 
-  private newCoin(plan: Plan, name: string, ticker: string, hue: number, dev: string): Coin {
+  private newCoin(plan: Plan, name: string, ticker: string, hue: number, dev: string, id?: string): Coin {
     const c: Coin = {
-      id: address(this.rng, 32) + "pump",
+      id: id ?? address(this.rng, 32) + "pump",
       name,
       ticker,
       hue,
@@ -685,6 +708,164 @@ export class Market {
         ...(closed && { positionPnlSol: pos.realizedSol, positionPnlPct: (pos.realizedSol / pos.boughtSol) * 100 }),
       });
     }
+  }
+
+  // ---------- shared (multiplayer) coins ----------
+  // Coins players launched publicly live on the server. Here they are read-only mirrors:
+  // they never tick locally, and your orders on them are settled by the server.
+
+  /** Create or refresh the mirror of a shared coin. */
+  upsertShared(s: SharedState, me: string | null): Coin {
+    const id = "s_" + s.uuid;
+    let c = this.coins.get(id);
+    if (!c) {
+      const plan = makePlan(new Rng(s.hue + 1));
+      Object.assign(plan, { socials: s.socials, rugAt: undefined, devSellAt: undefined, kolAt: undefined });
+      c = this.newCoin(plan, s.name, s.ticker, s.hue, "@" + s.creator, id);
+      c.startMcap = mcapUsd(newReserves());
+      c.trades = [];
+    }
+    const mine = !!me && s.creator.toLowerCase() === me.toLowerCase();
+    c.shared = { uuid: s.uuid, creator: s.creator };
+    c.mine = mine;
+    c.dev = mine ? "you" : "@" + s.creator;
+    c.kinds.set(c.dev, "dev");
+    c.createdAt = s.createdAt;
+    c.r = { phase: s.phase, rSol: s.rSol, rTok: s.rTok, tokensSold: s.tokensSold, realSol: s.realSol };
+    c.athMcap = s.athMcapUsd;
+    c.volumeSol = s.volumeSol;
+    c.buys = s.buys;
+    c.sells = s.sells;
+    c.lastTradeAt = s.lastTradeAt;
+    c.ruggedAt = s.ruggedAt;
+    if (s.ruggedAt !== undefined) c.devSold = true;
+    if (s.phase === "graduated" && c.graduatedAt === undefined) c.graduatedAt = s.lastTradeAt;
+    c.dead = false;
+    return c;
+  }
+
+  /** Holders of a shared coin: players by name, plus the simulated crowd as one wallet. */
+  setSharedHolders(c: Coin, holders: { username: string; tokens: number }[], crowdTokens: number, me: string | null) {
+    c.holders = new Map();
+    c.holderList = [];
+    c.holderIdx = new Map();
+    const add = (w: string, b: number, kind: WalletKind) => {
+      if (b < 1) return;
+      c.kinds.set(w, c.kinds.get(w) === "dev" ? "dev" : kind);
+      c.holderIdx.set(w, c.holderList.length);
+      c.holderList.push(w);
+      c.holders.set(w, b);
+    };
+    for (const h of holders) {
+      const isMe = !!me && h.username.toLowerCase() === me.toLowerCase();
+      add(isMe ? "you" : "@" + h.username, h.tokens, isMe ? "you" : "trader");
+    }
+    add("crowd", crowdTokens, "trader");
+  }
+
+  /** A trade that happened on the server (anyone's): chart and tape only, reserves come from upsertShared. */
+  ingestSharedTrade(c: Coin, t: { at: number; side: Side; sol: number; tokens: number; wallet: string; mcapUsd: number }) {
+    c.trades.push({ t: t.at, side: t.side, sol: t.sol, tokens: t.tokens, wallet: t.wallet, kind: c.kinds.get(t.wallet) ?? "trader", mcapUsd: t.mcapUsd });
+    if (c.trades.length > MAX_TRADES) c.trades.splice(0, c.trades.length - MAX_TRADES);
+    const sec = Math.floor(t.at / 1000);
+    addToCandles(c.candles, sec, t.mcapUsd, t.sol, MAX_1S);
+    addToCandles(c.candles1m, sec - (sec % 60), t.mcapUsd, t.sol, MAX_1M);
+  }
+
+  /**
+   * Reserve funds for an order the server will settle. Returns the minimum the server must
+   * give you (your slippage limit), computed from the price you see now.
+   */
+  externalOrder(req: OrderRequest): { ok: true; id: number; minOut: number } | { ok: false; reason: string } {
+    const c = this.coins.get(req.coinId);
+    if (!c?.shared) return { ok: false, reason: "Not a shared coin" };
+    if (!(req.amount > 0)) return { ok: false, reason: "Enter an amount" };
+    const held = this.positions.get(req.coinId)?.tokens ?? 0;
+    if (req.side === "buy") {
+      if (req.amount + req.priorityFeeSol > this.sol) return { ok: false, reason: "Insufficient SOL" };
+      this.sol -= req.amount + req.priorityFeeSol;
+    } else {
+      const locked = this.pending.filter((o) => o.side === "sell" && o.coinId === req.coinId).reduce((s, o) => s + o.amount, 0);
+      if (req.amount > held - locked + 1e-6) return { ok: false, reason: "Insufficient tokens" };
+      if (req.priorityFeeSol > this.sol) return { ok: false, reason: "Insufficient SOL for fee" };
+      this.sol -= req.priorityFeeSol;
+    }
+    const quote = req.side === "buy"
+      ? quoteBuy(c.r, req.amount * (1 - PLATFORM_FEE)).tokensOut
+      : quoteSell(c.r, req.amount).solOut * (1 - PLATFORM_FEE);
+    const id = this.nextId++;
+    const minOut = quote * (1 - req.slippagePct / 100);
+    this.pending.push({ ...req, id, executeAt: Infinity, minOut }); // settled by externalFill/externalFail
+    return { ok: true, id, minOut };
+  }
+
+  /** The server settled an external order. */
+  externalFill(id: number, r: { tokens: number; sol: number; fee: number; mcapUsd: number; rug: boolean }) {
+    const o = this.takePending(id);
+    if (!o) return;
+    const c = this.coins.get(o.coinId);
+    const ticker = c?.ticker ?? "?";
+    const base = { id: o.id, t: this.time, coinId: o.coinId, ticker, side: o.side, mcapUsd: r.mcapUsd, priorityFee: o.priorityFeeSol };
+    const pos = this.positions.get(o.coinId) ?? {
+      coinId: o.coinId, ticker, tokens: 0, costSol: 0, realizedSol: 0, boughtSol: 0, soldSol: 0,
+    };
+    if (o.side === "buy") {
+      this.sol += o.amount - r.sol; // server may have filled less
+      pos.tokens += r.tokens;
+      pos.costSol += r.sol + o.priorityFeeSol;
+      pos.boughtSol += r.sol;
+      this.positions.set(o.coinId, pos);
+      this.history.push({ ...base, status: "ok", sol: r.sol, tokens: r.tokens, fee: r.fee });
+      return;
+    }
+    const frac = pos.tokens > 0 ? Math.min(1, r.tokens / pos.tokens) : 1;
+    const cost = pos.costSol * frac;
+    const pnlSol = r.sol - cost - o.priorityFeeSol;
+    pos.tokens = Math.max(0, pos.tokens - r.tokens);
+    if (pos.tokens < 1) pos.tokens = 0;
+    pos.costSol -= cost;
+    pos.realizedSol += pnlSol;
+    pos.soldSol += r.sol;
+    this.sol += r.sol;
+    this.positions.set(o.coinId, pos);
+    const closed = pos.tokens === 0;
+    this.history.push({
+      ...base, status: "ok", sol: r.sol, tokens: r.tokens, fee: r.fee,
+      pnlSol, pnlPct: cost > 0 ? (pnlSol / cost) * 100 : 0, soldPct: frac * 100,
+      ...(r.rug && { note: "rug" as const }),
+      ...(closed && pos.boughtSol > 0 && { positionPnlSol: pos.realizedSol, positionPnlPct: (pos.realizedSol / pos.boughtSol) * 100 }),
+    });
+  }
+
+  /** The server refused an external order: refund, but the priority fee is gone. */
+  externalFail(id: number, reason: string) {
+    const o = this.takePending(id);
+    if (!o) return;
+    if (o.side === "buy") this.sol += o.amount;
+    const c = this.coins.get(o.coinId);
+    const pos = this.positions.get(o.coinId);
+    if (pos) pos.realizedSol -= o.priorityFeeSol;
+    this.history.push({
+      id: o.id, t: this.time, coinId: o.coinId, ticker: c?.ticker ?? "?", side: o.side, status: "failed", reason,
+      sol: 0, tokens: 0, fee: 0, mcapUsd: c ? mcapUsd(c.r) : 0, priorityFee: o.priorityFeeSol,
+    });
+  }
+
+  /** Record a public launch you made on the server (creation fee + dev buy). */
+  externalLaunch(coinId: string, ticker: string, devSol: number, tokens: number, mcap: number) {
+    this.sol -= CREATE_FEE_SOL + devSol;
+    this.positions.set(coinId, {
+      coinId, ticker, tokens, costSol: devSol, realizedSol: -CREATE_FEE_SOL, boughtSol: devSol, soldSol: 0,
+    });
+    this.history.push({
+      id: this.nextId++, t: this.time, coinId, ticker, side: "buy", status: "ok", note: "launch",
+      sol: devSol, tokens, mcapUsd: mcap, fee: devSol * 0.02 + CREATE_FEE_SOL, priorityFee: 0,
+    });
+  }
+
+  private takePending(id: number): PendingOrder | undefined {
+    const i = this.pending.findIndex((o) => o.id === id);
+    return i < 0 ? undefined : this.pending.splice(i, 1)[0];
   }
 
   /** What your bag would sell for right now (after fees and price impact). */
