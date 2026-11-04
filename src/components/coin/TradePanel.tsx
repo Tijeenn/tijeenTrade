@@ -6,6 +6,7 @@ import { SETTINGS } from "@/lib/settings";
 import { price, quoteBuy, quoteSell } from "@/lib/sim/curve";
 import { PLATFORM_FEE, type Coin, type Market } from "@/lib/sim/market";
 import { buy, sellPct } from "@/lib/store";
+import { ShareButton } from "@/components/ShareCard";
 import { Sol, SolIcon } from "@/components/Sol";
 
 type Side = "buy" | "sell";
@@ -137,7 +138,9 @@ export function PositionBox({ coin, m }: { coin: Coin; m: Market }) {
   return (
     <div className="num border-b border-line p-3 text-xs">
       <div className="mb-2 flex items-baseline justify-between">
-        <span className="font-semibold text-muted">Your position</span>
+        <span className="flex items-center gap-2 font-semibold text-muted">
+          Your position {pos.boughtSol > 0 && <ShareButton coinId={coin.id} label="📸" />}
+        </span>
         <span className={`text-sm font-bold ${color}`}>
           <Sol size={13}>{signed(total, (x) => sol(x))} ({signed(totalPct, (x) => pct(x, 1))})</Sol>
         </span>

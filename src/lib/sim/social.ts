@@ -199,6 +199,12 @@ export class Social {
   private news(m: Market) {
     if (!this.lastScan) return;
     const rng = this.rng;
+    if (m.meta && m.meta.startedAt > this.lastScan) {
+      const acc = getAccount("pumpalerts")!;
+      const w = m.meta.word;
+      this.push({ author: acc.id, text: `🔥 ${w.toUpperCase()} SEASON. ${w} coins are ripping, devs are launching copycats every few seconds. Don't be the last one in`, links: {} }, acc.followers, m.time);
+      this.alert(`New meta: ${w.toUpperCase()} coins are pumping. Early is everything, late is exit liquidity`, "info");
+    }
     for (const c of m.coins.values()) {
       if (c.graduatedAt !== undefined && c.graduatedAt > this.lastScan && rng.chance(0.8)) {
         const acc = getAccount("pumpalerts")!;

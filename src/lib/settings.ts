@@ -6,6 +6,7 @@ export interface Settings {
   sellPresets: number[];
   slippagePct: number;
   priorityFeeSol: number;
+  sound: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -15,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sellPresets: [10, 25, 50, 100],
   slippagePct: 20,
   priorityFeeSol: 0.001,
+  sound: true,
 };
 
 const KEY = "tijeen.settings.v1";

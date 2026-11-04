@@ -5,6 +5,7 @@ import { mc, pct, signed, sol, tokens } from "@/lib/format";
 import type { UserTrade } from "@/lib/sim/market";
 import Link from "next/link";
 import type { SocialAlert } from "@/lib/sim/social";
+import { sfx } from "@/lib/sound";
 import { getMarket, getSocial } from "@/lib/store";
 import { Sol } from "./Sol";
 
@@ -106,6 +107,16 @@ function FailedToast({ t }: { t: UserTrade }) {
   );
 }
 
+function playFor(t: UserTrade) {
+  if (t.status === "failed") return sfx.fail();
+  if (t.note === "launch") return sfx.launch();
+  if (t.note === "rug") return sfx.rug();
+  if (t.side === "buy") return sfx.buy();
+  const pnl = t.positionPnlPct ?? t.pnlPct ?? 0;
+  if (pnl >= 100) return sfx.bigWin();
+  return pnl >= 0 ? sfx.win() : sfx.loss();
+}
+
 /** Pops a notification whenever one of your orders lands or fails. Click to dismiss. */
 export function Toaster() {
   const [toasts, setToasts] = useState<UserTrade[]>([]);
@@ -121,12 +132,14 @@ export function Toaster() {
       if (newAlerts.length) {
         seenAlert = newAlerts.at(-1)!.id;
         setAlerts((a) => [...a, ...newAlerts].slice(-2));
+        sfx.alert();
         for (const a of newAlerts) setTimeout(() => setAlerts((all) => all.filter((x) => x.id !== a.id)), DURATION.social);
       }
       if (m.history.length <= seen) return;
       const fresh = m.history.slice(seen);
       seen = m.history.length;
       setToasts((t) => [...t, ...fresh].slice(-MAX_TOASTS));
+      playFor(fresh.at(-1)!);
       for (const f of fresh) {
         const ms = f.status === "failed" ? DURATION.failed : DURATION[f.side];
         setTimeout(() => setToasts((t) => t.filter((x) => x.id !== f.id)), ms);

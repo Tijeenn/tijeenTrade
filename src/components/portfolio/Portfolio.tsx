@@ -10,6 +10,7 @@ import { mcapUsd } from "@/lib/sim/curve";
 import type { Market } from "@/lib/sim/market";
 import { getRun, sellPct, useMarket, wallMs } from "@/lib/store";
 import { EquityChart } from "./EquityChart";
+import { ShareButton } from "@/components/ShareCard";
 
 const tone = (n: number) => (n > 0 ? "text-up" : n < 0 ? "text-down" : "text-text");
 const pnlSol = (n: number) => signed(n, (x) => sol(x));
@@ -97,6 +98,7 @@ function Closed({ m }: { m: Market }) {
           <th className={th}>Sold</th>
           <th className={th}>PnL</th>
           <th className={th}>Return</th>
+          <th className={th}></th>
         </tr>
       </thead>
       <tbody>
@@ -109,6 +111,7 @@ function Closed({ m }: { m: Market }) {
             <td className={td}><Sol>{sol(p.soldSol)}</Sol></td>
             <td className={`${td} ${tone(p.realizedSol)}`}><Sol>{pnlSol(p.realizedSol)}</Sol></td>
             <td className={`${td} ${tone(p.realizedSol)}`}>{signed((p.realizedSol / p.boughtSol) * 100, (x) => pct(x, 1))}</td>
+            <td className={td}><ShareButton coinId={p.coinId} /></td>
           </tr>
         ))}
       </tbody>

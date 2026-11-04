@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { HYPE_BADGE_MS, Socials } from "@/components/pulse/CoinCard";
+import { HYPE_BADGE_MS, Socials, StarButton } from "@/components/pulse/CoinCard";
 import { getAccount } from "@/lib/sim/social";
 import { TokenAvatar } from "@/components/TokenAvatar";
 import { age, compact, mc, pct, shortAddr } from "@/lib/format";
@@ -55,6 +55,12 @@ function TokenInfo({ coin, m }: { coin: Coin; m: Market }) {
       <Row label="Snipers" value={pct(s.sniperPct, 1)} bad={s.sniperPct > 10} hint="Share held by bots that bought in the first second" />
       <Row label="Bundled" value={pct(s.bundlePct, 1)} bad={s.bundlePct > 8} hint="Share bought by linked wallets in the creation block" />
       <Row label="Holders" value={String(s.holders)} hint="Wallets holding the token" />
+      <Row
+        label="Dev history"
+        value={coin.mine ? "You" : s.devPrevCoins === 0 ? "First coin" : `${s.devPrevCoins} coins · ${s.devPrevRugs} rugged · ${s.devPrevMigrations} migrated`}
+        bad={s.devPrevRugs > 0}
+        hint="What this dev's other coins did. Serial ruggers reuse their wallets"
+      />
       <Row label="ATH" value={mc(s.athMcapUsd)} sol hint="Highest market cap so far" />
       <div className="mt-3 flex items-center justify-between text-[11px] text-dim">
         <span>CA: {shortAddr(coin.id)}</span>
@@ -90,11 +96,15 @@ export function CoinView({ id }: { id: string }) {
                 <span className="font-bold">{coin.ticker}</span>
                 <span className="text-sm text-muted">{coin.name}</span>
                 <Socials coin={coin} />
+                <StarButton coinId={coin.id} className="!h-6 !w-6 border border-line-2 !text-sm !opacity-100" />
               </div>
               <div className="text-xs text-dim">
                 {age(s.ageSec * 1000)} old
                 {s.graduated && <span className="ml-2 rounded bg-up/15 px-1 text-up">Migrated</span>}
                 {coin.dead && <span className="ml-2 rounded bg-line-2 px-1 text-muted">Inactive</span>}
+                {m.meta && coin.themes.includes(m.meta.word) && (
+                  <span className="ml-2 rounded bg-orange-500/20 px-1 font-bold text-orange-400">🔥 {m.meta.word.toUpperCase()} META</span>
+                )}
                 {coin.hypedAt !== undefined && m.time - coin.hypedAt < HYPE_BADGE_MS && (
                   <span className="ml-2 rounded bg-orange-500/15 px-1 font-semibold text-orange-400">
                     🔥 {coin.hypedBy === "you" ? "You" : getAccount(coin.hypedBy ?? "")?.name ?? "@" + coin.hypedBy} posted about

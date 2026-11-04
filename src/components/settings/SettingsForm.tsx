@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Sol, SolIcon } from "@/components/Sol";
 import { age, sol } from "@/lib/format";
 import { syncScore } from "@/lib/account";
+import { sfx } from "@/lib/sound";
 import { DEFAULT_SETTINGS, SETTINGS, updateSettings, type Settings } from "@/lib/settings";
 import { getMarket, getRun, resetRun, wallMs } from "@/lib/store";
 
@@ -109,6 +110,29 @@ function NewRun() {
   );
 }
 
+function SoundToggle() {
+  const [on, setOn] = useState(SETTINGS.sound);
+  return (
+    <Section title="Sound">
+      <Field label="Sound effects" hint="Buys, wins, losses, rugs and alerts">
+        <button
+          role="switch"
+          aria-checked={on}
+          aria-label="Sound effects"
+          onClick={() => {
+            updateSettings({ sound: !on });
+            setOn(!on);
+            if (!on) sfx.win();
+          }}
+          className={`relative h-6 w-11 rounded-full transition-colors ${on ? "bg-up" : "bg-line-2"}`}
+        >
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
+        </button>
+      </Field>
+    </Section>
+  );
+}
+
 export function SettingsForm() {
   const [f, setF] = useState<Form>(() => toForm(SETTINGS));
   const [saved, setSaved] = useState(false);
@@ -141,6 +165,7 @@ export function SettingsForm() {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
       <h1 className="text-xl font-bold">Settings</h1>
       <NewRun />
+      <SoundToggle />
       <Section title="Trading">
         <Field label="Quick buy amount" hint="The ⚡ button on Pulse">
           <Input value={f.quickBuySol} onChange={(v) => set({ quickBuySol: v })} sol invalid={!positive(f.quickBuySol)} />

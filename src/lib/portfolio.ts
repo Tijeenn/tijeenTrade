@@ -24,16 +24,40 @@ export interface PortfolioStats {
   closed: Position[];
 }
 
-/** Average market cap you bought at, weighted by tokens. */
-export function avgEntry(m: Market, coinId: string): number {
+/** Average market cap you bought (or sold) at, weighted by tokens. */
+export function avgEntry(m: Market, coinId: string, side: "buy" | "sell" = "buy"): number {
   let w = 0, t = 0;
   for (const h of m.history) {
-    if (h.coinId !== coinId || h.side !== "buy" || h.status !== "ok") continue;
+    if (h.coinId !== coinId || h.side !== side || h.status !== "ok") continue;
     w += h.mcapUsd * h.tokens;
     t += h.tokens;
   }
   return t ? w / t : 0;
 }
+
+/** Everything a PnL share card shows about one trade (a coin you bought and sold). */
+export function tradeSummary(m: Market, coinId: string) {
+  const pos = m.positions.get(coinId);
+  if (!pos || pos.boughtSol <= 0) return null;
+  const mine = m.history.filter((h) => h.coinId === coinId && h.status === "ok");
+  const unrealized = pos.tokens > 0 ? m.positionValue(coinId) - pos.costSol : 0;
+  const pnlSol = pos.realizedSol + unrealized;
+  const coin = m.coins.get(coinId);
+  return {
+    ticker: pos.ticker,
+    name: coin?.name ?? pos.ticker,
+    hue: coin?.hue ?? 260,
+    pnlSol,
+    pnlPct: (pnlSol / pos.boughtSol) * 100,
+    boughtSol: pos.boughtSol,
+    soldSol: pos.soldSol,
+    entryMcUsd: avgEntry(m, coinId, "buy"),
+    exitMcUsd: pos.tokens > 0 && coin ? 0 : avgEntry(m, coinId, "sell"),
+    open: pos.tokens > 0,
+    heldMs: mine.length ? (pos.tokens > 0 ? m.time : mine.at(-1)!.t) - mine[0].t : 0,
+  };
+}
+export type TradeSummary = NonNullable<ReturnType<typeof tradeSummary>>;
 
 export function portfolioStats(m: Market): PortfolioStats {
   const open: OpenRow[] = [];
