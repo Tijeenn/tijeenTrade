@@ -1,6 +1,6 @@
 import { SOL_USD } from "./curve";
 import type { Market } from "./market";
-import { getAccount, type Social, type Tier } from "./social";
+import { getAccount, type Social, type Tier, type TweetKind } from "./social";
 import { coinStats } from "./stats";
 
 /**
@@ -106,6 +106,7 @@ export interface BotsSave {
 }
 
 const EXIT_SLIPPAGE = 50; // exits are market dumps: get out
+const BULLISH = new Set<TweetKind>(["shill", "keyword", "clean"]);
 const BUY_TIMEOUT_MS = 5000;
 const MAX_LOG = 100;
 
@@ -174,6 +175,8 @@ export class Bots {
     for (const t of fresh.reverse()) {
       const acc = getAccount(t.author);
       if (!acc || !cfg.tiers.includes(acc.tier)) continue;
+      // only bullish posts: never buy a coin because someone posted a rug warning about it
+      if (t.kind && !BULLISH.has(t.kind)) continue;
       const targets = [...(t.pumped ?? []).map((p) => p.coinId), ...Object.values(t.links)];
       for (const id of new Set(targets)) {
         const c = m.coins.get(id);

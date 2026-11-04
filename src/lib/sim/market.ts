@@ -261,8 +261,11 @@ export class Market {
     const c = this.coins.get(coinId);
     if (!c || c.dead) return;
     c.boost += h.strength;
-    c.hypedAt = this.time;
-    c.hypedBy = h.by;
+    if (h.strength > 0) {
+      // a warning (negative hype) is not "posted about it" in the 🔥 sense
+      c.hypedAt = this.time;
+      c.hypedBy = h.by;
+    }
     const rng = this.rng;
     for (let i = 0; i < h.buyers; i++) {
       const w = this.newWallet(c, "trader");
@@ -447,7 +450,7 @@ export class Market {
 
     const mcap = mcapUsd(c.r);
     let rate = p.baseRate * activity(p, age) * Math.min(3, Math.pow(Math.max(1, mcap / c.startMcap), 0.2));
-    rate *= 1 + c.boost + meta;
+    rate *= 1 + Math.abs(c.boost) + meta; // hype or FUD: either way more people trade it
     // After a rug: a burst of panic selling, then silence.
     if (rugged) rate = p.baseRate * 4 * Math.exp(-(age - rugSec!) / 15);
 
