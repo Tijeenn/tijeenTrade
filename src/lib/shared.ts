@@ -51,6 +51,7 @@ export async function syncShared(): Promise<void> {
     const coins = new Map(rows.map((r) => [r.id, m.upsertShared(toState(r), me)]));
 
     const trades = await fetchSharedTrades(lastTradeId);
+    if (lastTradeId === null) lastTradeId = 0; // from now on only fetch new trades, even if there were none
     for (const t of trades) {
       lastTradeId = Math.max(lastTradeId ?? 0, t.id);
       const c = coins.get(t.coin_id);
