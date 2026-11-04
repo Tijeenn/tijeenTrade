@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Market } from "./sim/market";
+import { restore, snapshot, type MarketSave } from "./sim/persist";
 import { SETTINGS } from "./settings";
 
 /** Market history simulated before the page shows, so the feed isn't empty. */
@@ -10,23 +11,113 @@ const LOOP_MS = 100;
 /** Hidden tabs get throttled; cap catch-up so returning to the tab can't freeze it. */
 const MAX_CATCHUP_MS = 2000;
 
+const SAVE_KEY = "tijeen.save.v1";
+const SAVE_EVERY_MS = 5000;
+const EQUITY_EVERY_MS = 10_000;
+const MAX_EQUITY_POINTS = 3000;
+
+/** One "run" = one starting balance. Resetting starts a new run. */
+export interface Run {
+  startedAt: number; // wall ms
+  equity: [number, number][]; // [wall ms, SOL]
+}
+
+interface SaveFile {
+  run: Run;
+  market: MarketSave;
+}
+
 let market: Market | null = null;
+let run: Run = { startedAt: 0, equity: [] };
 let epochMs = 0;
+
+function freshMarket(startSol: number): Market {
+  const m = new Market({ seed: Math.floor(Math.random() * 2 ** 31), startSol });
+  m.step(WARMUP_MS);
+  epochMs = Math.round((Date.now() - m.time) / 1000) * 1000;
+  return m;
+}
+
+function readSave(): SaveFile | null {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    return raw ? (JSON.parse(raw) as SaveFile) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function save(): void {
+  if (!market) return;
+  const file: SaveFile = { run, market: snapshot(market) };
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(file));
+  } catch {
+    // Over quota: drop the chart history of saved coins and try once more.
+    for (const c of file.market.coins) c.candles = c.candles.slice(-120);
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(file));
+    } catch {
+      /* storage unavailable; keep playing unsaved */
+    }
+  }
+}
+
+function startLoop() {
+  let last = performance.now();
+  let lastSave = 0;
+  let lastEquity = 0;
+  setInterval(() => {
+    const now = performance.now();
+    market!.step(Math.min(now - last, MAX_CATCHUP_MS));
+    last = now;
+    if (now - lastEquity >= EQUITY_EVERY_MS) {
+      lastEquity = now;
+      run.equity.push([Date.now(), market!.equity()]);
+      if (run.equity.length > MAX_EQUITY_POINTS) run.equity.splice(0, run.equity.length - MAX_EQUITY_POINTS);
+    }
+    if (now - lastSave >= SAVE_EVERY_MS) {
+      lastSave = now;
+      save();
+    }
+  }, LOOP_MS);
+  const flush = () => document.visibilityState === "hidden" && save();
+  document.addEventListener("visibilitychange", flush);
+  window.addEventListener("pagehide", save);
+}
 
 /** The one market for this browser tab. Starts on first use (client only). */
 export function getMarket(): Market {
   if (market) return market;
-  const m = new Market({ seed: Math.floor(Math.random() * 2 ** 31), startSol: SETTINGS.startSol });
-  m.step(WARMUP_MS);
-  epochMs = Math.round((Date.now() - m.time) / 1000) * 1000;
-  let last = performance.now();
-  setInterval(() => {
-    const now = performance.now();
-    m.step(Math.min(now - last, MAX_CATCHUP_MS));
-    last = now;
-  }, LOOP_MS);
-  market = m;
-  return m;
+  const saved = readSave();
+  if (saved) {
+    market = freshMarket(saved.market.startSol);
+    try {
+      restore(market, saved.market);
+      run = saved.run;
+    } catch {
+      market = freshMarket(SETTINGS.startSol); // corrupt save: start over
+      run = { startedAt: Date.now(), equity: [[Date.now(), market.startSol]] };
+    }
+  } else {
+    market = freshMarket(SETTINGS.startSol);
+    run = { startedAt: Date.now(), equity: [[Date.now(), market.startSol]] };
+  }
+  startLoop();
+  return market;
+}
+
+export function getRun(): Run {
+  getMarket();
+  return run;
+}
+
+/** Wipe everything and start a new run with `startSol`. */
+export function resetRun(startSol: number): void {
+  getMarket(); // make sure the loop is running
+  market = freshMarket(startSol);
+  run = { startedAt: Date.now(), equity: [[Date.now(), startSol]] };
+  save();
 }
 
 /** Wall-clock ms for a simulation timestamp. */

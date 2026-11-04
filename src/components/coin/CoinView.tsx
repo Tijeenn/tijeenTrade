@@ -3,29 +3,29 @@
 import Link from "next/link";
 import { Socials } from "@/components/pulse/CoinCard";
 import { TokenAvatar } from "@/components/TokenAvatar";
-import { age, pct, shortAddr, usd } from "@/lib/format";
-import { SOL_USD } from "@/lib/sim/curve";
+import { age, compact, mc, pct, shortAddr } from "@/lib/format";
 import type { Coin, Market } from "@/lib/sim/market";
 import { coinStats } from "@/lib/sim/stats";
 import { useMarket } from "@/lib/store";
 import { Chart } from "./Chart";
 import { CoinTables } from "./Tables";
 import { PositionBox, TradePanel } from "./TradePanel";
+import { Sol } from "@/components/Sol";
 
-function Stat({ label, value, cls = "" }: { label: string; value: string; cls?: string }) {
+function Stat({ label, value, cls = "", sol }: { label: string; value: string; cls?: string; sol?: boolean }) {
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wide text-dim">{label}</div>
-      <div className={`num text-sm ${cls}`}>{value}</div>
+      <div className={`num text-sm ${cls}`}>{sol ? <Sol>{value}</Sol> : value}</div>
     </div>
   );
 }
 
-function Row({ label, value, bad, hint }: { label: string; value: string; bad?: boolean; hint: string }) {
+function Row({ label, value, bad, hint, sol }: { label: string; value: string; bad?: boolean; hint: string; sol?: boolean }) {
   return (
     <div className="flex justify-between py-1" title={hint}>
       <span className="text-dim">{label}</span>
-      <span className={`num ${bad ? "text-down" : "text-text"}`}>{value}</span>
+      <span className={`num ${bad ? "text-down" : "text-text"}`}>{sol ? <Sol>{value}</Sol> : value}</span>
     </div>
   );
 }
@@ -44,7 +44,7 @@ function TokenInfo({ coin, m }: { coin: Coin; m: Market }) {
           <div className="h-1.5 overflow-hidden rounded bg-line">
             <div className="h-full bg-up" style={{ width: `${s.progress * 100}%` }} />
           </div>
-          <div className="mt-1 text-[10px] text-dim">Migrates to a liquidity pool at 100% (~$60K MC)</div>
+          <div className="mt-1 text-[10px] text-dim">Migrates to a liquidity pool at 100% (~410 SOL market cap)</div>
         </div>
       )}
       <Row label="Top 10 holders" value={pct(s.top10Pct, 1)} bad={s.top10Pct > 30} hint="Share of supply held by the 10 biggest wallets" />
@@ -52,7 +52,7 @@ function TokenInfo({ coin, m }: { coin: Coin; m: Market }) {
       <Row label="Snipers" value={pct(s.sniperPct, 1)} bad={s.sniperPct > 10} hint="Share held by bots that bought in the first second" />
       <Row label="Bundled" value={pct(s.bundlePct, 1)} bad={s.bundlePct > 8} hint="Share bought by linked wallets in the creation block" />
       <Row label="Holders" value={String(s.holders)} hint="Wallets holding the token" />
-      <Row label="ATH" value={usd(s.athMcapUsd)} hint="Highest market cap so far" />
+      <Row label="ATH" value={mc(s.athMcapUsd)} sol hint="Highest market cap so far" />
       <div className="mt-3 flex items-center justify-between text-[11px] text-dim">
         <span>CA: {shortAddr(coin.id)}</span>
         <span>Dev: {shortAddr(coin.dev)}</span>
@@ -73,7 +73,7 @@ export function CoinView({ id }: { id: string }) {
     );
   }
   const s = coinStats(coin, m.time);
-  const liquidityUsd = (coin.r.phase === "curve" ? coin.r.realSol : coin.r.rSol) * SOL_USD * 2;
+  const liquiditySol = (coin.r.phase === "curve" ? coin.r.realSol : coin.r.rSol) * 2;
   const change = (s.mcapUsd / coin.startMcap - 1) * 100;
 
   return (
@@ -95,10 +95,10 @@ export function CoinView({ id }: { id: string }) {
               </div>
             </div>
           </div>
-          <div className="num text-xl font-bold">{usd(s.mcapUsd, 2)}</div>
+          <Sol size={18} className="text-xl font-bold">{mc(s.mcapUsd, 2)}</Sol>
           <Stat label="Since launch" value={(change >= 0 ? "+" : "") + pct(change, 1)} cls={change >= 0 ? "text-up" : "text-down"} />
-          <Stat label="Liquidity" value={usd(liquidityUsd)} />
-          <Stat label="Volume" value={usd(s.volumeSol * SOL_USD)} />
+          <Stat label="Liquidity" value={compact(liquiditySol)} sol />
+          <Stat label="Volume" value={compact(s.volumeSol)} sol />
           <Stat label="Buys / Sells" value={`${s.buys} / ${s.sells}`} />
         </div>
         <div className="h-[380px] shrink-0 border-b border-line lg:h-auto lg:min-h-[300px] lg:flex-[3]">

@@ -1,16 +1,22 @@
 import { SOL_USD } from "./sim/curve";
 
-const compact = (n: number, digits = 1) => {
+/** 1234 -> "1.2K". Small numbers keep a few decimals. */
+export function compact(n: number, digits = 1): string {
   const a = Math.abs(n);
   if (a >= 1e9) return (n / 1e9).toFixed(digits) + "B";
   if (a >= 1e6) return (n / 1e6).toFixed(digits) + "M";
-  if (a >= 1e3) return (n / 1e3).toFixed(digits) + "K";
-  return n.toFixed(a < 10 && digits > 0 ? digits : 0);
-};
+  if (a >= 1e4) return (n / 1e3).toFixed(digits) + "K";
+  if (a >= 100) return n.toFixed(0);
+  if (a >= 1) return n.toFixed(Math.max(digits, 1));
+  return n.toFixed(3);
+}
 
-export const usd = (n: number, digits = 1) => "$" + compact(n, digits);
+/** The engine prices in USD internally; everything is shown in SOL. */
+export const usdToSol = (usd: number) => usd / SOL_USD;
+/** Market cap (given in USD by the engine) as a compact SOL string. */
+export const mc = (mcapUsd: number, digits = 1) => compact(usdToSol(mcapUsd), digits);
+
 export const tokens = (n: number) => compact(n, 2);
-export const solToUsd = (sol: number) => sol * SOL_USD;
 
 export function sol(n: number, digits?: number): string {
   const d = digits ?? (Math.abs(n) >= 100 ? 1 : Math.abs(n) >= 1 ? 2 : 3);

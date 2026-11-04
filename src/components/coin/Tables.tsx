@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { age, pct, shortAddr, sol, tokens, usd } from "@/lib/format";
-import { TOTAL_SUPPLY, SOL_USD } from "@/lib/sim/curve";
+import { age, mc, pct, shortAddr, sol, tokens } from "@/lib/format";
+import { TOTAL_SUPPLY } from "@/lib/sim/curve";
 import type { Coin, Market, WalletKind } from "@/lib/sim/market";
+import { Sol } from "@/components/Sol";
 
 const LABEL: Partial<Record<WalletKind, { text: string; cls: string }>> = {
   dev: { text: "DEV", cls: "bg-warn/15 text-warn" },
@@ -33,7 +34,6 @@ function TradesTable({ coin, m }: { coin: Coin; m: Market }) {
           <th className="font-normal">Type</th>
           <th className="font-normal">MC</th>
           <th className="font-normal">Amount</th>
-          <th className="hidden font-normal sm:table-cell">USD</th>
           <th className="font-normal">Maker</th>
         </tr>
       </thead>
@@ -42,9 +42,8 @@ function TradesTable({ coin, m }: { coin: Coin; m: Market }) {
           <tr key={t.t + ":" + i + ":" + t.wallet} className={`border-t border-line ${t.kind === "you" ? "bg-brand/5" : ""}`}>
             <td className="px-3 py-1 text-dim">{age(m.time - t.t)}</td>
             <td className={t.side === "buy" ? "text-up" : "text-down"}>{t.side === "buy" ? "Buy" : "Sell"}</td>
-            <td>{usd(t.mcapUsd)}</td>
-            <td className={t.side === "buy" ? "text-up" : "text-down"}>{sol(t.sol)} ◎</td>
-            <td className="hidden text-muted sm:table-cell">{usd(t.sol * SOL_USD, 0)}</td>
+            <td><Sol>{mc(t.mcapUsd)}</Sol></td>
+            <td><Sol className={t.side === "buy" ? "text-up" : "text-down"}>{sol(t.sol)}</Sol></td>
             <td><Maker wallet={t.wallet} kind={t.kind} /></td>
           </tr>
         ))}
@@ -96,7 +95,7 @@ function MyTrades({ coin, m }: { coin: Coin; m: Market }) {
           <th className="px-3 py-1.5 font-normal">Age</th>
           <th className="font-normal">Type</th>
           <th className="font-normal">MC</th>
-          <th className="font-normal">SOL</th>
+          <th className="font-normal">Amount</th>
           <th className="font-normal">Tokens</th>
           <th className="font-normal">Fees</th>
         </tr>
@@ -108,7 +107,7 @@ function MyTrades({ coin, m }: { coin: Coin; m: Market }) {
             <td className={h.status === "failed" ? "text-dim" : h.side === "buy" ? "text-up" : "text-down"}>
               {h.status === "failed" ? `Failed ${h.side}` : h.side === "buy" ? "Buy" : "Sell"}
             </td>
-            <td>{usd(h.mcapUsd)}</td>
+            <td><Sol>{mc(h.mcapUsd)}</Sol></td>
             <td>{h.status === "failed" ? "–" : sol(h.sol)}</td>
             <td>{h.status === "failed" ? h.reason : tokens(h.tokens)}</td>
             <td className="text-muted">{sol(h.fee + h.priorityFee, 4)}</td>

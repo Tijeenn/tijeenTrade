@@ -5,7 +5,7 @@ import {
   type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type SeriesMarker, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
-import { usd } from "@/lib/format";
+import { compact, usdToSol } from "@/lib/format";
 import type { Coin, Market } from "@/lib/sim/market";
 import { wallMs } from "@/lib/store";
 
@@ -29,7 +29,7 @@ interface Bar {
   volume: number;
 }
 
-/** Group the coin's 1s (or 1m) candles into bars of `tf` seconds, on the wall clock. */
+/** Group the coin's 1s (or 1m) candles into bars of `tf` seconds, on the wall clock, in SOL. */
 function aggregate(c: Coin, tf: number): Bar[] {
   const src = tf < 60 ? c.candles : c.candles1m;
   const epoch = wallMs(0) / 1000;
@@ -38,12 +38,13 @@ function aggregate(c: Coin, tf: number): Bar[] {
     const t = (Math.floor((epoch + k.t) / tf) * tf) as UTCTimestamp;
     const last = out[out.length - 1];
     if (last && last.time === t) {
-      last.high = Math.max(last.high, k.h);
-      last.low = Math.min(last.low, k.l);
-      last.close = k.c;
+      last.high = Math.max(last.high, usdToSol(k.h));
+      last.low = Math.min(last.low, usdToSol(k.l));
+      last.close = usdToSol(k.c);
       last.volume += k.v;
     } else {
-      out.push({ time: t, open: k.o, high: k.h, low: k.l, close: k.c, volume: k.v });
+      const [o, h, l, c] = [k.o, k.h, k.l, k.c].map(usdToSol);
+      out.push({ time: t, open: o, high: h, low: l, close: c, volume: k.v });
     }
   }
   return out;
@@ -77,7 +78,7 @@ export function Chart({ coin, m }: { coin: Coin; m: Market }) {
     });
     const candles = chart.addSeries(CandlestickSeries, {
       upColor: UP, downColor: DOWN, borderVisible: false, wickUpColor: UP, wickDownColor: DOWN,
-      priceFormat: { type: "custom", formatter: (p: number) => usd(p, 2), minMove: 1 },
+      priceFormat: { type: "custom", formatter: (p: number) => compact(p, 2), minMove: 0.01 },
     });
     const volume = chart.addSeries(HistogramSeries, {
       priceScaleId: "", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false,
@@ -139,7 +140,7 @@ export function Chart({ coin, m }: { coin: Coin; m: Market }) {
             {t.label}
           </button>
         ))}
-        <span className="ml-auto text-[11px] text-dim">Market cap (USD)</span>
+        <span className="ml-auto text-[11px] text-dim">Market cap (SOL)</span>
       </div>
       <div ref={el} className="min-h-0 flex-1" />
     </div>

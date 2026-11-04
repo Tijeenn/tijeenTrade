@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { sol, tokens } from "@/lib/format";
 import type { UserTrade } from "@/lib/sim/market";
 import { getMarket } from "@/lib/store";
+import { Sol } from "./Sol";
 
 interface Toast {
   key: number;
@@ -47,7 +48,7 @@ export function Toaster() {
                 {t.side === "buy" ? "Bought" : "Sold"} {tokens(t.tokens)} ${t.ticker}
               </div>
               <div className="text-xs text-muted">
-                {t.side === "buy" ? "for" : "for"} {sol(t.sol)} SOL · fees {sol(t.fee + t.priorityFee, 4)}
+                for <Sol size={10}>{sol(t.sol)}</Sol> · fees <Sol size={10}>{sol(t.fee + t.priorityFee, 4)}</Sol>
               </div>
             </>
           )}

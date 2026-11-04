@@ -6,11 +6,12 @@ import { SETTINGS } from "@/lib/settings";
 import { price, quoteBuy, quoteSell } from "@/lib/sim/curve";
 import { PLATFORM_FEE, type Coin, type Market } from "@/lib/sim/market";
 import { buy, sellPct } from "@/lib/store";
+import { Sol, SolIcon } from "@/components/Sol";
 
 type Side = "buy" | "sell";
 
 function NumField({ label, value, onChange, suffix }: {
-  label: string; value: string; onChange: (v: string) => void; suffix: string;
+  label: string; value: string; onChange: (v: string) => void; suffix: React.ReactNode;
 }) {
   return (
     <label className="flex flex-1 items-center gap-1 rounded border border-line-2 bg-bg px-2 py-1 text-xs">
@@ -39,7 +40,7 @@ export function TradePanel({ coin, m }: { coin: Coin; m: Market }) {
   const pending = m.pending.filter((o) => o.coinId === coin.id).length;
   const opts = { slippagePct: Number(slip) || 0, priorityFeeSol: Number(prio) || 0 };
 
-  let estimate = "";
+  let estimate: React.ReactNode = "";
   let impact = 0;
   if (side === "buy") {
     const amt = Number(buyAmt);
@@ -53,7 +54,7 @@ export function TradePanel({ coin, m }: { coin: Coin; m: Market }) {
     if (t > 0) {
       const q = quoteSell(coin.r, t);
       impact = (1 - q.gross / t / price(coin.r)) * 100;
-      estimate = `≈ ${sol(q.solOut * (1 - PLATFORM_FEE))} SOL`;
+      estimate = <>≈ <Sol>{sol(q.solOut * (1 - PLATFORM_FEE))}</Sol></>;
     }
   }
 
@@ -97,12 +98,12 @@ export function TradePanel({ coin, m }: { coin: Coin; m: Market }) {
           label="Amount"
           value={amount}
           onChange={side === "buy" ? setBuyAmt : setSellAmt}
-          suffix={side === "buy" ? "SOL" : "%"}
+          suffix={side === "buy" ? <SolIcon size={11} /> : "%"}
         />
       </div>
       <div className="mb-3 flex gap-1">
         <NumField label="Slip" value={slip} onChange={setSlip} suffix="%" />
-        <NumField label="Prio" value={prio} onChange={setPrio} suffix="SOL" />
+        <NumField label="Prio" value={prio} onChange={setPrio} suffix={<SolIcon size={11} />} />
       </div>
 
       <button
@@ -138,18 +139,18 @@ export function PositionBox({ coin, m }: { coin: Coin; m: Market }) {
       <div className="mb-2 flex items-baseline justify-between">
         <span className="font-semibold text-muted">Your position</span>
         <span className={`text-sm font-bold ${color}`}>
-          {signed(total, (x) => sol(x))} SOL ({signed(totalPct, (x) => pct(x, 1))})
+          <Sol size={13}>{signed(total, (x) => sol(x))} ({signed(totalPct, (x) => pct(x, 1))})</Sol>
         </span>
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-1">
         <span className="text-dim">Holding</span>
         <span className="text-right">{tokens(pos.tokens)}</span>
         <span className="text-dim">Value</span>
-        <span className="text-right">{sol(value)} SOL</span>
+        <Sol className="justify-end">{sol(value)}</Sol>
         <span className="text-dim">Bought</span>
-        <span className="text-right">{sol(pos.boughtSol)} SOL</span>
+        <Sol className="justify-end">{sol(pos.boughtSol)}</Sol>
         <span className="text-dim">Sold</span>
-        <span className="text-right">{sol(pos.soldSol)} SOL</span>
+        <Sol className="justify-end">{sol(pos.soldSol)}</Sol>
         <span className="text-dim">Unrealized</span>
         <span className={`text-right ${unrealized >= 0 ? "text-up" : "text-down"}`}>{signed(unrealized, (x) => sol(x))}</span>
         <span className="text-dim">Realized</span>

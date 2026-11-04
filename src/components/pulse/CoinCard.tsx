@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { TokenAvatar } from "@/components/TokenAvatar";
-import { age, pct, usd } from "@/lib/format";
+import { age, compact, mc, pct } from "@/lib/format";
 import type { Coin, Market } from "@/lib/sim/market";
 import { coinStats, type CoinStats } from "@/lib/sim/stats";
-import { SOL_USD } from "@/lib/sim/curve";
 import { buy } from "@/lib/store";
 import { SETTINGS } from "@/lib/settings";
+import { Sol } from "@/components/Sol";
 
 function Badge({ label, value, bad, title }: { label: string; value: string; bad: boolean; title: string }) {
   return (
@@ -67,7 +67,7 @@ export function CoinCard({ coin, m }: { coin: Coin; m: Market }) {
             </div>
             <div className="num shrink-0 text-sm">
               <span className="text-[10px] text-dim">MC </span>
-              <span className={s.mcapUsd >= coin.startMcap ? "text-up" : "text-down"}>{usd(s.mcapUsd)}</span>
+              <Sol className={s.mcapUsd >= coin.startMcap ? "text-up" : "text-down"}>{mc(s.mcapUsd)}</Sol>
             </div>
           </div>
           <div className="num mt-0.5 flex items-center justify-between gap-2 text-xs">
@@ -82,7 +82,7 @@ export function CoinCard({ coin, m }: { coin: Coin; m: Market }) {
             </div>
             <div>
               <span className="text-[10px] text-dim">V </span>
-              {usd(s.volumeSol * SOL_USD)}
+              <Sol size={10}>{compact(s.volumeSol)}</Sol>
             </div>
           </div>
           <div className="mt-1.5 flex items-center justify-between gap-2">

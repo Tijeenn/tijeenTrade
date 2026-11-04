@@ -67,6 +67,7 @@ export interface Coin {
 
 export interface Position {
   coinId: string;
+  ticker: string;
   tokens: number;
   costSol: number; // SOL cost basis of the tokens still held (fees included)
   realizedSol: number;
@@ -141,7 +142,7 @@ export class Market {
   history: UserTrade[] = [];
   pending: PendingOrder[] = [];
   private nextSpawnAt = 0;
-  private nextId = 1;
+  nextId = 1; // order ids (persisted)
   private opts: Required<MarketOptions>;
 
   constructor(opts: MarketOptions = {}) {
@@ -426,7 +427,7 @@ export class Market {
       mcapUsd: mcapUsd(c.r), priorityFee: o.priorityFeeSol,
     };
     const pos = this.positions.get(c.id) ?? {
-      coinId: c.id, tokens: 0, costSol: 0, realizedSol: 0, boughtSol: 0, soldSol: 0,
+      coinId: c.id, ticker: c.ticker, tokens: 0, costSol: 0, realizedSol: 0, boughtSol: 0, soldSol: 0,
     };
     const fail = (reason: string) => {
       if (o.side === "buy") this.sol += o.amount;
