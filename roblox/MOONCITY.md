@@ -4,8 +4,15 @@ This file is everything a new Claude session needs to start building the game in
 Read it fully before touching Studio. The owner (Tijeenn) already agreed to everything below;
 don't re-ask these decisions, just build. Ask only when something here is genuinely unclear.
 
-- Design sketches (5 boards: basement, terminal, PC desktop, city map, upgrades):
+- Design sketches (5 boards): images in `roblox/sketches/` (open them with the Read tool), also at
   https://claude.ai/artifact/8nrEswxkWaiBQFq92QD8ju
+  - `1-basement-spawn.png`: spawn in Mom's basement, [E] Sit at PC, Moonies HUD, first quest
+  - `2-trading-terminal.png`: MoonTerminal trading app on the PC
+  - `2b-pc-desktop-apps.png`: the PC desktop with all apps, Chirp + Moon Wallet open, taskbar
+  - `3-city-map.png`: Moon City layout and legend
+  - `4-upgrades-ranks.png`: PCs, homes and ranks
+  The sketches are a guide for the look, not exact. Where they differ from this file, this file wins
+  (e.g. the sketches still show the parody "Elon Tusk"; in Roblox use made-up characters, see 2).
 - The website this game grows out of: https://tijeentrade.vercel.app (this repo, `src/`)
 - Working style: follow the karpathy guidelines the owner uses. Think before coding, keep it
   simple, make small changes that do one thing, and check each step works (playtest) before moving on.
